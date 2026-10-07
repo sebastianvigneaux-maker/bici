@@ -1,0 +1,1194 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0d10">
+<title>FTMS Bike</title>
+<style>
+:root{--bg:#0b0d10;--card:#15191e;--line:#272d34;--text:#f4f6f8;--muted:#89929d;--accent:#65d68a;--warn:#ffb454;--danger:#ff6969}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif
+}
+main{
+  max-width:760px;
+  margin:auto;
+  padding:env(safe-area-inset-top) 14px 30px
+}
+header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:14px 2px 10px
+}
+h1{font-size:21px;margin:0}
+.status{
+  font-size:12px;
+  color:var(--muted);
+  display:flex;
+  align-items:center;
+  gap:7px
+}
+.dot{
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:#777
+}
+.dot.on{
+  background:var(--accent);
+  box-shadow:0 0 10px var(--accent)
+}
+button{
+  border:0;
+  border-radius:12px;
+  background:#252b32;
+  color:var(--text);
+  padding:12px 15px;
+  font-weight:700;
+  font-size:14px
+}
+button.primary{
+  background:var(--accent);
+  color:#061009
+}
+button.danger{
+  background:#3a2020;
+  color:#ff9a9a!important
+}
+button:disabled{opacity:.45}
+.controls{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:9px;
+  margin-bottom:12px
+}
+.card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:14px
+}
+.hero{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px
+}
+.metric .label{
+  font-size:12px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.06em
+}
+.metric .value{
+  font-size:36px;
+  font-weight:800;
+  line-height:1.08;
+  margin-top:4px
+}
+.metric .unit{
+  font-size:13px;
+  color:var(--muted)
+}
+.smallgrid{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:10px;
+  margin-top:10px
+}
+.small .value{
+  font-size:24px;
+  font-weight:750;
+  margin-top:3px
+}
+.small .label{
+  font-size:12px;
+  color:var(--muted)
+}
+.chart-card{margin-top:10px}
+.chart-title{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font-weight:750
+}
+.chart-title span{
+  font-size:12px;
+  color:var(--muted);
+  font-weight:500
+}
+canvas{
+  display:block;
+  width:100%;
+  height:210px;
+  margin-top:8px
+}
+details{margin-top:10px}
+.raw{
+  font:11px ui-monospace,SFMono-Regular,Menlo,monospace;
+  color:#b8c0c9;
+  word-break:break-all;
+  white-space:pre-wrap;
+  background:#0a0c0f;
+  padding:10px;
+  border-radius:10px
+}
+.history{margin-top:10px}
+.session{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  border-top:1px solid var(--line);
+  padding:12px 0
+}
+.session:first-child{border-top:0}
+.session b{font-size:14px}
+.session small{color:var(--muted)}
+.notice{
+  font-size:12px;
+  color:var(--muted);
+  line-height:1.45;
+  margin:8px 2px
+}
+@media(min-width:600px){
+  .hero{grid-template-columns:repeat(4,1fr)}
+  .smallgrid{grid-template-columns:repeat(4,1fr)}
+  .metric .value{font-size:32px}
+}
+</style>
+</head>
+
+<body>
+<main>
+
+<header>
+  <div>
+    <h1>🚴 FTMS Bike</h1>
+    <div class="status">
+      <i id="dot" class="dot"></i>
+      <span id="status">Desconectada</span>
+    </div>
+  </div>
+
+  <button id="wakeBtn">Pantalla</button>
+</header>
+
+<div class="controls">
+  <button id="connect" class="primary">Conectar bici</button>
+  <button id="finish" class="danger" disabled>Terminar sesión</button>
+</div>
+
+<section class="hero">
+
+  <div class="card metric">
+    <div class="label">Potencia</div>
+    <div class="value" id="power">—</div>
+    <div class="unit">W</div>
+  </div>
+
+  <div class="card metric">
+    <div class="label">Velocidad</div>
+    <div class="value" id="speed">—</div>
+    <div class="unit">km/h</div>
+  </div>
+
+  <div class="card metric">
+    <div class="label">Cadencia</div>
+    <div class="value" id="cadence">—</div>
+    <div class="unit">rpm</div>
+  </div>
+
+  <div class="card metric">
+    <div class="label">Resistencia</div>
+    <div class="value" id="resistance">—</div>
+    <div class="unit">nivel</div>
+  </div>
+
+</section>
+
+<section class="smallgrid">
+
+  <div class="card small">
+    <div class="label">Distancia</div>
+    <div class="value" id="distance">—</div>
+    <div class="unit">km</div>
+  </div>
+
+  <div class="card small">
+    <div class="label">Tiempo pedaleando</div>
+    <div class="value" id="elapsed">00:00</div>
+    <div class="unit">h:mm:ss</div>
+  </div>
+
+  <div class="card small">
+    <div class="label">Calorías</div>
+    <div class="value" id="calories">—</div>
+    <div class="unit">kcal</div>
+  </div>
+
+  <div class="card small">
+    <div class="label">Potencia promedio</div>
+    <div class="value" id="avgPower">—</div>
+    <div class="unit">W</div>
+  </div>
+
+</section>
+
+<section class="card chart-card">
+
+  <div class="chart-title">
+    Potencia
+    <span>últimos 10 minutos</span>
+  </div>
+
+  <canvas id="chart"></canvas>
+
+</section>
+
+<div class="notice">
+  Los campos FTMS llegan según sus flags. La app conserva los valores ya recibidos para que dos notificaciones alternadas no se pisen.
+</div>
+
+<details>
+  <summary>Bytes crudos del último paquete</summary>
+  <div id="raw" class="raw">—</div>
+</details>
+
+<details class="history">
+  <summary>Historial</summary>
+  <div id="historyList"></div>
+</details>
+
+</main>
+
+<script>
+
+'use strict';
+
+const SERVICE_UUID = 0x1826;
+const DATA_UUID = 0x2AD2;
+const HISTORY_KEY = 'ftms-bike-history-v1';
+
+let device = null;
+let characteristic = null;
+let wakeLock = null;
+let reconnectTimer = null;
+
+let session = null;
+let lastPacket = [];
+let lastFields = {};
+let powerSamples = [];
+
+const $ = id => document.getElementById(id);
+
+function fmt(n,d=0){
+  return n == null ? '—' : Number(n).toFixed(d);
+}
+
+function fmtTime(s){
+  s = Math.max(0,Math.floor(s || 0));
+
+  let h = Math.floor(s / 3600);
+  let m = Math.floor((s % 3600) / 60);
+  let z = s % 60;
+
+  if(h){
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(z).padStart(2,'0')}`;
+  }
+
+  return `${String(m).padStart(2,'0')}:${String(z).padStart(2,'0')}`;
+}
+
+function signed16(v){
+  return v & 0x8000 ? v - 0x10000 : v;
+}
+
+function u24(a,i){
+  return a[i] | (a[i+1] << 8) | (a[i+2] << 16);
+}
+
+function s16(a,i){
+  return signed16(a[i] | (a[i+1] << 8));
+}
+
+function u16(a,i){
+  return a[i] | (a[i+1] << 8);
+}
+
+
+/*
+ * FTMS Indoor Bike Data
+ * Characteristic: 0x2AD2
+ *
+ * Flags:
+ *
+ * Bit 0  Instantaneous Speed Present
+ * Bit 1  Average Speed Present
+ * Bit 2  Instantaneous Cadence Present
+ * Bit 3  Average Cadence Present
+ * Bit 4  Total Distance Present
+ * Bit 5  Resistance Level Present
+ * Bit 6  Instantaneous Power Present
+ * Bit 7  Average Power Present
+ * Bit 8  Expended Energy Present
+ * Bit 9  Heart Rate Present
+ * Bit 10 Metabolic Equivalent Present
+ * Bit 11 Elapsed Time Present
+ * Bit 12 Remaining Time Present
+ *
+ * IMPORTANTE:
+ * En FTMS el bit 0 tiene lógica invertida:
+ *
+ * 0 = Instantaneous Speed está presente
+ * 1 = Instantaneous Speed NO está presente
+ */
+
+function parseFTMS(buf){
+
+  const a = new Uint8Array(buf);
+  const v = new DataView(buf);
+
+  if(a.length < 2){
+    return null;
+  }
+
+  const flags = v.getUint16(0,true);
+
+  const f = {
+    flags,
+    raw:Array.from(a)
+  };
+
+  let p = 2;
+
+
+  // Bit 0: Instantaneous Speed
+  if(!(flags & 1)){
+
+    if(p + 2 > a.length) return f;
+
+    f.speed = u16(a,p) / 100;
+
+    p += 2;
+  }
+
+
+  // Bit 1: Average Speed
+  if(flags & (1 << 1)){
+
+    if(p + 2 > a.length) return f;
+
+    f.avgSpeed = u16(a,p) / 100;
+
+    p += 2;
+  }
+
+
+  // Bit 2: Instantaneous Cadence
+  if(flags & (1 << 2)){
+
+    if(p + 2 > a.length) return f;
+
+    f.cadence = u16(a,p) / 2;
+
+    p += 2;
+  }
+
+
+  // Bit 3: Average Cadence
+  if(flags & (1 << 3)){
+
+    if(p + 2 > a.length) return f;
+
+    f.avgCadence = u16(a,p) / 2;
+
+    p += 2;
+  }
+
+
+  // Bit 4: Total Distance
+  if(flags & (1 << 4)){
+
+    if(p + 3 > a.length) return f;
+
+    f.distance = u24(a,p);
+
+    p += 3;
+  }
+
+
+  // Bit 5: Resistance Level
+  if(flags & (1 << 5)){
+
+    if(p + 2 > a.length) return f;
+
+    f.resistance = s16(a,p);
+
+    p += 2;
+  }
+
+
+  // Bit 6: Instantaneous Power
+  if(flags & (1 << 6)){
+
+    if(p + 2 > a.length) return f;
+
+    f.power = s16(a,p);
+
+    p += 2;
+  }
+
+
+  // Bit 7: Average Power
+  if(flags & (1 << 7)){
+
+    if(p + 2 > a.length) return f;
+
+    f.avgPower = s16(a,p);
+
+    p += 2;
+  }
+
+
+  // Bit 8: Expended Energy
+  if(flags & (1 << 8)){
+
+    if(p + 5 > a.length) return f;
+
+    f.calories = u16(a,p);
+
+    f.energyHour = u16(a,p + 2);
+
+    f.energyMinute = a[p + 4];
+
+    p += 5;
+  }
+
+
+  // Bit 9: Heart Rate
+  if(flags & (1 << 9)){
+
+    if(p + 1 > a.length) return f;
+
+    f.hr = a[p];
+
+    p++;
+  }
+
+
+  // Bit 10: Metabolic Equivalent
+  if(flags & (1 << 10)){
+
+    if(p + 1 > a.length) return f;
+
+    f.met = a[p] / 10;
+
+    p++;
+  }
+
+
+  // Bit 11: Elapsed Time
+  if(flags & (1 << 11)){
+
+    if(p + 2 > a.length) return f;
+
+    f.elapsed = u16(a,p);
+
+    p += 2;
+  }
+
+
+  // Bit 12: Remaining Time
+  if(flags & (1 << 12)){
+
+    if(p + 2 > a.length) return f;
+
+    f.remaining = u16(a,p);
+
+    p += 2;
+  }
+
+
+  f.bytesConsumed = p;
+  f.trailing = a.length - p;
+
+  return f;
+}
+
+
+/*
+ * IMPORTANTE PARA TU BICI:
+ *
+ * Las notificaciones llegan en dos paquetes alternados.
+ *
+ * Por eso NO hacemos:
+ *
+ * lastFields = f;
+ *
+ * sino que mezclamos únicamente los campos
+ * presentes en el paquete actual.
+ */
+
+function mergeFields(f){
+
+  for(const [k,v] of Object.entries(f || {})){
+
+    if(
+      k !== 'raw' &&
+      k !== 'flags' &&
+      v !== undefined
+    ){
+
+      lastFields[k] = v;
+    }
+
+  }
+
+  lastPacket = f?.raw || lastPacket;
+
+  updateUI();
+}
+
+
+function updateUI(){
+
+  const f = lastFields;
+
+  $('power').textContent =
+    fmt(f.power);
+
+  $('speed').textContent =
+    fmt(f.speed,1);
+
+  $('cadence').textContent =
+    fmt(f.cadence,1);
+
+  $('resistance').textContent =
+    fmt(f.resistance);
+
+  $('distance').textContent =
+    f.distance == null
+      ? '—'
+      : fmt(f.distance / 1000,2);
+
+  $('calories').textContent =
+    fmt(f.calories);
+
+  $('avgPower').textContent =
+    fmt(f.avgPower);
+
+  $('elapsed').textContent =
+    fmtTime(
+      f.elapsed ||
+      (session?.start
+        ? (Date.now() - session.start) / 1000
+        : 0)
+    );
+
+  $('raw').textContent =
+    lastPacket.length
+      ? lastPacket
+          .map(x => x.toString(16).padStart(2,'0'))
+          .join(' ')
+      : '—';
+}
+
+
+/*
+ * Gráfico de potencia.
+ *
+ * Conservamos solamente los últimos
+ * 10 minutos.
+ */
+
+function samplePower(){
+
+  const p = lastFields.power;
+
+  if(p == null){
+    return;
+  }
+
+  const now = Date.now();
+
+  powerSamples.push({
+    t:now,
+    p
+  });
+
+  powerSamples =
+    powerSamples.filter(
+      x => now - x.t <= 600000
+    );
+
+  drawChart();
+}
+
+
+function drawChart(){
+
+  const c = $('chart');
+
+  const dpr =
+    window.devicePixelRatio || 1;
+
+  const r =
+    c.getBoundingClientRect();
+
+  c.width =
+    Math.max(1,r.width * dpr);
+
+  c.height =
+    Math.max(1,r.height * dpr);
+
+  const x =
+    c.getContext('2d');
+
+  x.scale(dpr,dpr);
+
+  const w = r.width;
+  const h = r.height;
+
+  x.clearRect(0,0,w,h);
+
+
+  // Grid
+
+  x.strokeStyle = '#272d34';
+  x.lineWidth = 1;
+
+  for(let i=0;i<5;i++){
+
+    const y =
+      20 +
+      i * (h - 35) / 4;
+
+    x.beginPath();
+
+    x.moveTo(0,y);
+    x.lineTo(w,y);
+
+    x.stroke();
+  }
+
+
+  if(!powerSamples.length){
+    return;
+  }
+
+
+  const now = Date.now();
+
+  const max =
+    Math.max(
+      100,
+      ...powerSamples.map(q => q.p)
+    );
+
+
+  x.strokeStyle = '#65d68a';
+  x.lineWidth = 2;
+
+  x.beginPath();
+
+
+  powerSamples.forEach((q,i) => {
+
+    const xx =
+      w -
+      (now - q.t) / 600000 * w;
+
+    const yy =
+      h -
+      12 -
+      (Math.max(0,q.p) / max) *
+      (h - 28);
+
+    if(i){
+      x.lineTo(xx,yy);
+    }else{
+      x.moveTo(xx,yy);
+    }
+
+  });
+
+  x.stroke();
+
+
+  x.fillStyle = '#89929d';
+  x.font = '11px system-ui';
+
+  x.fillText(
+    `${Math.round(max)} W`,
+    5,
+    14
+  );
+
+  x.fillText(
+    '10 min',
+    w - 45,
+    h - 3
+  );
+}
+
+
+window.addEventListener(
+  'resize',
+  drawChart
+);
+
+
+/*
+ * Sesiones
+ */
+
+function startSession(){
+
+  if(session){
+    return;
+  }
+
+  session = {
+    id:Date.now(),
+    start:Date.now(),
+    device:device?.name || 'FTMS Bike'
+  };
+
+  lastFields = {};
+  powerSamples = [];
+
+  updateUI();
+
+  $('finish').disabled = false;
+}
+
+
+function finishSession(){
+
+  if(!session){
+    return;
+  }
+
+  const f = lastFields;
+
+  const duration =
+    f.elapsed ||
+    Math.round(
+      (Date.now() - session.start) / 1000
+    );
+
+
+  const item = {
+
+    ...session,
+
+    end:Date.now(),
+
+    duration,
+
+    power:f.power ?? null,
+
+    avgPower:f.avgPower ?? null,
+
+    speed:f.speed ?? null,
+
+    cadence:f.cadence ?? null,
+
+    distance:
+      f.distance != null
+        ? f.distance / 1000
+        : null,
+
+    calories:f.calories ?? null
+
+  };
+
+
+  const hist =
+    JSON.parse(
+      localStorage.getItem(HISTORY_KEY) || '[]'
+    );
+
+
+  hist.unshift(item);
+
+
+  localStorage.setItem(
+    HISTORY_KEY,
+    JSON.stringify(
+      hist.slice(0,100)
+    )
+  );
+
+
+  session = null;
+
+  $('finish').disabled = true;
+
+  renderHistory();
+}
+
+
+function renderHistory(){
+
+  const h =
+    JSON.parse(
+      localStorage.getItem(HISTORY_KEY) || '[]'
+    );
+
+  const el =
+    $('historyList');
+
+
+  el.innerHTML =
+    h.length
+
+      ? h.map(x => `
+
+        <div class="session">
+
+          <div>
+
+            <b>
+              ${new Date(x.start).toLocaleString()}
+            </b>
+
+            <br>
+
+            <small>
+
+              ${fmtTime(x.duration)}
+              ·
+              ${
+                x.distance == null
+                  ? '—'
+                  : fmt(x.distance,2) + ' km'
+              }
+              ·
+              ${x.calories ?? '—'} kcal
+
+            </small>
+
+          </div>
+
+
+          <div style="text-align:right">
+
+            <b>
+              ${x.avgPower ?? '—'} W
+            </b>
+
+            <br>
+
+            <small>
+              prom.
+            </small>
+
+          </div>
+
+        </div>
+
+      `).join('')
+
+      :
+
+      '<div class="notice">No hay sesiones guardadas.</div>';
+}
+
+
+/*
+ * Wake Lock API
+ */
+
+async function requestWakeLock(){
+
+  try{
+
+    if('wakeLock' in navigator){
+
+      wakeLock =
+        await navigator.wakeLock.request(
+          'screen'
+        );
+
+      $('wakeBtn').textContent =
+        'Pantalla activa';
+
+
+      wakeLock.addEventListener(
+        'release',
+        () => {
+
+          $('wakeBtn').textContent =
+            'Pantalla';
+
+        }
+      );
+
+    }
+
+  }catch(e){
+
+    console.log(
+      'Wake Lock no disponible',
+      e
+    );
+
+  }
+}
+
+
+document.addEventListener(
+  'visibilitychange',
+  () => {
+
+    if(
+      document.visibilityState === 'visible' &&
+      session
+    ){
+
+      requestWakeLock();
+
+    }
+
+  }
+);
+
+
+/*
+ * Conexión Web Bluetooth
+ */
+
+async function connect(
+  reconnect = false
+){
+
+  if(!navigator.bluetooth){
+
+    alert(
+      'Este navegador no soporta Web Bluetooth. ' +
+      'En Android, prueba Chrome y sirve esta página por HTTPS o desde localhost.'
+    );
+
+    return;
+  }
+
+
+  try{
+
+    /*
+     * Primera conexión:
+     *
+     * requestDevice necesita interacción
+     * del usuario.
+     *
+     * Las reconexiones posteriores utilizan
+     * el mismo dispositivo.
+     */
+
+    if(
+      !device ||
+      !reconnect
+    ){
+
+      device =
+        await navigator.bluetooth.requestDevice({
+
+          filters:[
+            {
+              services:[
+                SERVICE_UUID
+              ]
+            }
+          ],
+
+          optionalServices:[
+            SERVICE_UUID
+          ]
+
+        });
+
+    }
+
+
+    device.addEventListener(
+      'gattserverdisconnected',
+      onDisconnected,
+      {once:true}
+    );
+
+
+    $('status').textContent =
+      'Conectando…';
+
+
+    const server =
+      await device.gatt.connect();
+
+
+    const service =
+      await server.getPrimaryService(
+        SERVICE_UUID
+      );
+
+
+    characteristic =
+      await service.getCharacteristic(
+        DATA_UUID
+      );
+
+
+    await characteristic.startNotifications();
+
+
+    characteristic.addEventListener(
+      'characteristicvaluechanged',
+      onData
+    );
+
+
+    $('dot').classList.add('on');
+
+    $('status').textContent =
+      device.name || 'Conectada';
+
+
+    startSession();
+
+    requestWakeLock();
+
+  }catch(e){
+
+    console.error(e);
+
+    $('status').textContent =
+      'Error: ' +
+      (e.message || e);
+
+    $('dot').classList.remove('on');
+
+  }
+
+}
+
+
+/*
+ * Datos FTMS
+ */
+
+function onData(ev){
+
+  const f =
+    parseFTMS(
+      ev.target.value.buffer
+    );
+
+  if(!f){
+    return;
+  }
+
+  mergeFields(f);
+}
+
+
+/*
+ * Desconexión y reconexión automática
+ */
+
+function onDisconnected(){
+
+  $('dot').classList.remove('on');
+
+  $('status').textContent =
+    'Desconectada — reconectando…';
+
+  characteristic = null;
+
+
+  clearTimeout(
+    reconnectTimer
+  );
+
+
+  reconnectTimer =
+    setTimeout(
+      () => {
+
+        if(
+          device?.gatt &&
+          !device.gatt.connected
+        ){
+
+          connect(true);
+
+        }
+
+      },
+      1200
+    );
+}
+
+
+/*
+ * Botones
+ */
+
+$('connect').onclick =
+  () => connect(false);
+
+
+$('finish').onclick =
+  () => finishSession();
+
+
+$('wakeBtn').onclick =
+  requestWakeLock;
+
+
+/*
+ * Actualización del reloj
+ */
+
+setInterval(
+  () => {
+
+    if(session){
+
+      $('elapsed').textContent =
+        fmtTime(
+          lastFields.elapsed ||
+          (Date.now() - session.start) / 1000
+        );
+
+    }
+
+  },
+  1000
+);
+
+
+/*
+ * Muestreo gráfico
+ */
+
+setInterval(
+  samplePower,
+  1000
+);
+
+
+/*
+ * Inicialización
+ */
+
+renderHistory();
+drawChart();
+
+</script>
+
+</body>
+  </html>
