@@ -6,1189 +6,172 @@
 <meta name="theme-color" content="#0b0d10">
 <title>FTMS Bike</title>
 <style>
-:root{--bg:#0b0d10;--card:#15191e;--line:#272d34;--text:#f4f6f8;--muted:#89929d;--accent:#65d68a;--warn:#ffb454;--danger:#ff6969}
-*{box-sizing:border-box}
-body{
-  margin:0;
-  background:var(--bg);
-  color:var(--text);
-  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif
-}
-main{
-  max-width:760px;
-  margin:auto;
-  padding:env(safe-area-inset-top) 14px 30px
-}
-header{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:14px 2px 10px
-}
-h1{font-size:21px;margin:0}
-.status{
-  font-size:12px;
-  color:var(--muted);
-  display:flex;
-  align-items:center;
-  gap:7px
-}
-.dot{
-  width:8px;
-  height:8px;
-  border-radius:50%;
-  background:#777
-}
-.dot.on{
-  background:var(--accent);
-  box-shadow:0 0 10px var(--accent)
-}
-button{
-  border:0;
-  border-radius:12px;
-  background:#252b32;
-  color:var(--text);
-  padding:12px 15px;
-  font-weight:700;
-  font-size:14px
-}
-button.primary{
-  background:var(--accent);
-  color:#061009
-}
-button.danger{
-  background:#3a2020;
-  color:#ff9a9a!important
-}
-button:disabled{opacity:.45}
-.controls{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:9px;
-  margin-bottom:12px
-}
-.card{
-  background:var(--card);
-  border:1px solid var(--line);
-  border-radius:16px;
-  padding:14px
-}
-.hero{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:10px
-}
-.metric .label{
-  font-size:12px;
-  color:var(--muted);
-  text-transform:uppercase;
-  letter-spacing:.06em
-}
-.metric .value{
-  font-size:36px;
-  font-weight:800;
-  line-height:1.08;
-  margin-top:4px
-}
-.metric .unit{
-  font-size:13px;
-  color:var(--muted)
-}
-.smallgrid{
-  display:grid;
-  grid-template-columns:repeat(2,1fr);
-  gap:10px;
-  margin-top:10px
-}
-.small .value{
-  font-size:24px;
-  font-weight:750;
-  margin-top:3px
-}
-.small .label{
-  font-size:12px;
-  color:var(--muted)
-}
-.chart-card{margin-top:10px}
-.chart-title{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  font-weight:750
-}
-.chart-title span{
-  font-size:12px;
-  color:var(--muted);
-  font-weight:500
-}
-canvas{
-  display:block;
-  width:100%;
-  height:210px;
-  margin-top:8px
-}
-details{margin-top:10px}
-.raw{
-  font:11px ui-monospace,SFMono-Regular,Menlo,monospace;
-  color:#b8c0c9;
-  word-break:break-all;
-  white-space:pre-wrap;
-  background:#0a0c0f;
-  padding:10px;
-  border-radius:10px
-}
-.history{margin-top:10px}
-.session{
-  display:flex;
-  justify-content:space-between;
-  gap:12px;
-  border-top:1px solid var(--line);
-  padding:12px 0
-}
-.session:first-child{border-top:0}
-.session b{font-size:14px}
-.session small{color:var(--muted)}
-.notice{
-  font-size:12px;
-  color:var(--muted);
-  line-height:1.45;
-  margin:8px 2px
-}
-@media(min-width:600px){
-  .hero{grid-template-columns:repeat(4,1fr)}
-  .smallgrid{grid-template-columns:repeat(4,1fr)}
-  .metric .value{font-size:32px}
-}
+:root{--bg:#0b0d10;--card:#15191e;--line:#272d34;--text:#f4f6f8;--muted:#89929d;--accent:#65d68a;--warn:#ffb454;--danger:#ff6969;--blue:#70a7ff}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{min-height:100vh}main{max-width:780px;margin:auto;padding:env(safe-area-inset-top) 14px calc(30px + env(safe-area-inset-bottom))}.hidden{display:none!important}
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 2px 10px}h1{font-size:21px;margin:0}.status{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:7px}.dot{width:8px;height:8px;border-radius:50%;background:#777}.dot.on{background:var(--accent);box-shadow:0 0 10px var(--accent)}
+button{border:0;border-radius:12px;background:#252b32;color:var(--text);padding:12px 15px;font-weight:700;font-size:14px}button.primary{background:var(--accent);color:#061009}button.danger{background:#3a2020;color:#ff9a9a!important}button.blue{background:#20314f;color:#a9c8ff}button:disabled{opacity:.45}button.smallbtn{padding:8px 10px;font-size:12px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:12px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}.hero{display:grid;grid-template-columns:1fr 1fr;gap:10px}.metric .label,.small .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.metric .value{font-size:36px;font-weight:800;line-height:1.08;margin-top:4px}.metric .unit,.small .unit{font-size:13px;color:var(--muted)}.smallgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px}.small .value{font-size:24px;font-weight:750;margin-top:3px}.chart-card{margin-top:10px}.chart-title{display:flex;justify-content:space-between;align-items:center;font-weight:750}.chart-title span{font-size:12px;color:var(--muted);font-weight:500}canvas{display:block;width:100%;height:210px;margin-top:8px;touch-action:none}.notice{font-size:12px;color:var(--muted);line-height:1.45;margin:8px 2px}.raw{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:#b8c0c9;word-break:break-all;white-space:pre-wrap;background:#0a0c0f;padding:10px;border-radius:10px}details{margin-top:10px}summary{cursor:pointer}.history{margin-top:10px}.session-row{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding:12px 0;cursor:pointer}.session-row:first-child{border-top:0}.session-row b{font-size:14px}.session-row small{color:var(--muted)}.row-actions{display:flex;gap:6px;align-items:center}.empty{padding:20px 0;color:var(--muted);font-size:13px}.resume{margin-bottom:10px;border:1px solid #3c4d3f;background:#111a14}.resume b{color:var(--accent)}
+.screen-title{display:flex;align-items:center;gap:10px;margin:4px 0 12px}.back{padding:8px 11px}.screen-title h2{font-size:20px;margin:0}.summarygrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.summaryitem{background:#101419;border:1px solid var(--line);border-radius:12px;padding:10px}.summaryitem .v{font-size:21px;font-weight:800}.summaryitem .l{font-size:11px;color:var(--muted);margin-top:2px}.detail-chart{margin-top:10px}.chart-hint{font-size:11px;color:var(--muted);margin-top:5px}.tooltip{position:fixed;z-index:20;pointer-events:none;background:#050608;border:1px solid #39414b;border-radius:9px;padding:8px 10px;font-size:12px;box-shadow:0 8px 30px #0008;white-space:nowrap}.zones table,.splits table{width:100%;border-collapse:collapse;font-size:12px}.zones th,.zones td,.splits th,.splits td{text-align:left;padding:8px 5px;border-bottom:1px solid var(--line)}.zones th,.splits th{color:var(--muted);font-weight:600}.bar{height:7px;border-radius:5px;background:#252b32;overflow:hidden}.bar>i{display:block;height:100%;background:var(--accent)}.settings{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.settings input{width:90px;background:#0b0d10;border:1px solid var(--line);color:var(--text);padding:9px;border-radius:9px;text-align:right}.export-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+@media(min-width:600px){.hero{grid-template-columns:repeat(4,1fr)}.smallgrid{grid-template-columns:repeat(4,1fr)}.metric .value{font-size:32px}.summarygrid{grid-template-columns:repeat(4,1fr)}}
 </style>
 </head>
-
 <body>
 <main>
+<header><div><h1>🚴 FTMS Bike</h1><div class="status"><i id="dot" class="dot"></i><span id="status">Desconectada</span></div></div><button id="wakeBtn">Pantalla</button></header>
 
-<header>
-  <div>
-    <h1>🚴 FTMS Bike</h1>
-    <div class="status">
-      <i id="dot" class="dot"></i>
-      <span id="status">Desconectada</span>
-    </div>
-  </div>
+<div id="resumeBox" class="card resume hidden"><b>Sesión en curso recuperada</b><div id="resumeText" class="notice"></div><div class="export-row"><button id="resumeBtn" class="primary">Continuar sesión</button><button id="discardActive" class="danger">Descartar</button></div></div>
 
-  <button id="wakeBtn">Pantalla</button>
-</header>
-
-<div class="controls">
-  <button id="connect" class="primary">Conectar bici</button>
-  <button id="finish" class="danger" disabled>Terminar sesión</button>
-</div>
-
+<section id="liveScreen">
+<div class="controls"><button id="connect" class="primary">Conectar bici</button><button id="finish" class="danger" disabled>Terminar sesión</button></div>
 <section class="hero">
-
-  <div class="card metric">
-    <div class="label">Potencia</div>
-    <div class="value" id="power">—</div>
-    <div class="unit">W</div>
-  </div>
-
-  <div class="card metric">
-    <div class="label">Velocidad</div>
-    <div class="value" id="speed">—</div>
-    <div class="unit">km/h</div>
-  </div>
-
-  <div class="card metric">
-    <div class="label">Cadencia</div>
-    <div class="value" id="cadence">—</div>
-    <div class="unit">rpm</div>
-  </div>
-
-  <div class="card metric">
-    <div class="label">Resistencia</div>
-    <div class="value" id="resistance">—</div>
-    <div class="unit">nivel</div>
-  </div>
-
+<div class="card metric"><div class="label">Potencia</div><div class="value" id="power">—</div><div class="unit">W</div></div>
+<div class="card metric"><div class="label">Velocidad</div><div class="value" id="speed">—</div><div class="unit">km/h</div></div>
+<div class="card metric"><div class="label">Cadencia</div><div class="value" id="cadence">—</div><div class="unit">rpm</div></div>
+<div class="card metric"><div class="label">Resistencia</div><div class="value" id="resistance">—</div><div class="unit">nivel</div></div>
 </section>
-
 <section class="smallgrid">
-
-  <div class="card small">
-    <div class="label">Distancia</div>
-    <div class="value" id="distance">—</div>
-    <div class="unit">km</div>
-  </div>
-
-  <div class="card small">
-    <div class="label">Tiempo pedaleando</div>
-    <div class="value" id="elapsed">00:00</div>
-    <div class="unit">h:mm:ss</div>
-  </div>
-
-  <div class="card small">
-    <div class="label">Calorías</div>
-    <div class="value" id="calories">—</div>
-    <div class="unit">kcal</div>
-  </div>
-
-  <div class="card small">
-    <div class="label">Potencia promedio</div>
-    <div class="value" id="avgPower">—</div>
-    <div class="unit">W</div>
-  </div>
-
+<div class="card small"><div class="label">Distancia</div><div class="value" id="distance">—</div><div class="unit">km</div></div>
+<div class="card small"><div class="label">Tiempo pedaleando</div><div class="value" id="elapsed">00:00</div><div class="unit">h:mm:ss</div></div>
+<div class="card small"><div class="label">Calorías</div><div class="value" id="calories">—</div><div class="unit">kcal</div></div>
+<div class="card small"><div class="label">Potencia promedio</div><div class="value" id="avgPower">—</div><div class="unit">W</div></div>
+</section>
+<section class="card chart-card"><div class="chart-title">Potencia <span>últimos 10 minutos</span></div><canvas id="liveChart"></canvas></section>
+<div class="notice">La app conserva los campos de notificaciones FTMS alternadas y registra una muestra por segundo. Si FTMS no entrega distancia, se integra desde la velocidad.</div>
+<details><summary>Bytes crudos del último paquete</summary><div id="raw" class="raw">—</div></details>
 </section>
 
-<section class="card chart-card">
-
-  <div class="chart-title">
-    Potencia
-    <span>últimos 10 minutos</span>
-  </div>
-
-  <canvas id="chart"></canvas>
-
+<section id="historyScreen" class="hidden">
+<div class="screen-title"><button class="back" id="backFromHistory">←</button><h2>Historial</h2></div>
+<div id="historyList"></div>
 </section>
 
-<div class="notice">
-  Los campos FTMS llegan según sus flags. La app conserva los valores ya recibidos para que dos notificaciones alternadas no se pisen.
-</div>
+<section id="detailScreen" class="hidden">
+<div class="screen-title"><button class="back" id="backFromDetail">←</button><h2 id="detailTitle">Sesión</h2></div>
+<div id="detailContent"></div>
+</section>
 
-<details>
-  <summary>Bytes crudos del último paquete</summary>
-  <div id="raw" class="raw">—</div>
-</details>
-
-<details class="history">
-  <summary>Historial</summary>
-  <div id="historyList"></div>
-</details>
-
+<section id="historyNav" class="card" style="margin-top:10px"><div class="export-row"><button id="openHistory" class="blue">📚 Historial</button><button id="clearHistory" class="danger">Borrar todo</button></div></section>
 </main>
+<div id="tooltip" class="tooltip hidden"></div>
 
 <script>
-
 'use strict';
 
-const SERVICE_UUID = 0x1826;
-const DATA_UUID = 0x2AD2;
-const HISTORY_KEY = 'ftms-bike-history-v1';
+const SERVICE_UUID=0x1826, DATA_UUID=0x2AD2;
+const DB_NAME='ftms-bike-db-v2', DB_VERSION=1;
+const SESSION_STORE='sessions', ACTIVE_STORE='active';
+const FTP_KEY='ftms-bike-ftp';
+let device=null, characteristic=null, wakeLock=null, reconnectTimer=null;
+let session=null, lastFields={}, lastPacket=[], powerSamples=[];
+let sampleTimer=null, dbPromise=null, detailSession=null;
+let ftpW=Number(localStorage.getItem(FTP_KEY)||200);
+const $=id=>document.getElementById(id);
+const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+const fmt=(n,d=0)=>n==null||!Number.isFinite(Number(n))?'—':Number(n).toFixed(d);
+function fmtTime(s){s=Math.max(0,Math.floor(s||0));let h=Math.floor(s/3600),m=Math.floor(s%3600/60),z=s%60;return h?`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(z).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(z).padStart(2,'0')}`}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function signed16(v){return v&0x8000?v-0x10000:v}function u24(a,i){return a[i]|a[i+1]<<8|a[i+2]<<16}function s16(a,i){return signed16(a[i]|a[i+1]<<8)}function u16(a,i){return a[i]|a[i+1]<<8}
 
-let device = null;
-let characteristic = null;
-let wakeLock = null;
-let reconnectTimer = null;
-
-let session = null;
-let lastPacket = [];
-let lastFields = {};
-let powerSamples = [];
-
-const $ = id => document.getElementById(id);
-
-function fmt(n,d=0){
-  return n == null ? '—' : Number(n).toFixed(d);
-}
-
-function fmtTime(s){
-  s = Math.max(0,Math.floor(s || 0));
-
-  let h = Math.floor(s / 3600);
-  let m = Math.floor((s % 3600) / 60);
-  let z = s % 60;
-
-  if(h){
-    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(z).padStart(2,'0')}`;
-  }
-
-  return `${String(m).padStart(2,'0')}:${String(z).padStart(2,'0')}`;
-}
-
-function signed16(v){
-  return v & 0x8000 ? v - 0x10000 : v;
-}
-
-function u24(a,i){
-  return a[i] | (a[i+1] << 8) | (a[i+2] << 16);
-}
-
-function s16(a,i){
-  return signed16(a[i] | (a[i+1] << 8));
-}
-
-function u16(a,i){
-  return a[i] | (a[i+1] << 8);
-}
-
-
-/*
- * FTMS Indoor Bike Data
- * Characteristic: 0x2AD2
- *
- * Flags:
- *
- * Bit 0  Instantaneous Speed Present
- * Bit 1  Average Speed Present
- * Bit 2  Instantaneous Cadence Present
- * Bit 3  Average Cadence Present
- * Bit 4  Total Distance Present
- * Bit 5  Resistance Level Present
- * Bit 6  Instantaneous Power Present
- * Bit 7  Average Power Present
- * Bit 8  Expended Energy Present
- * Bit 9  Heart Rate Present
- * Bit 10 Metabolic Equivalent Present
- * Bit 11 Elapsed Time Present
- * Bit 12 Remaining Time Present
- *
- * IMPORTANTE:
- * En FTMS el bit 0 tiene lógica invertida:
- *
- * 0 = Instantaneous Speed está presente
- * 1 = Instantaneous Speed NO está presente
- */
-
+/* FTMS 0x2AD2. Bit 0 is More Data: 0 means instantaneous speed is present. */
 function parseFTMS(buf){
-
-  const a = new Uint8Array(buf);
-  const v = new DataView(buf);
-
-  if(a.length < 2){
-    return null;
-  }
-
-  const flags = v.getUint16(0,true);
-
-  const f = {
-    flags,
-    raw:Array.from(a)
-  };
-
-  let p = 2;
-
-
-  // Bit 0: Instantaneous Speed
-  if(!(flags & 1)){
-
-    if(p + 2 > a.length) return f;
-
-    f.speed = u16(a,p) / 100;
-
-    p += 2;
-  }
-
-
-  // Bit 1: Average Speed
-  if(flags & (1 << 1)){
-
-    if(p + 2 > a.length) return f;
-
-    f.avgSpeed = u16(a,p) / 100;
-
-    p += 2;
-  }
-
-
-  // Bit 2: Instantaneous Cadence
-  if(flags & (1 << 2)){
-
-    if(p + 2 > a.length) return f;
-
-    f.cadence = u16(a,p) / 2;
-
-    p += 2;
-  }
-
-
-  // Bit 3: Average Cadence
-  if(flags & (1 << 3)){
-
-    if(p + 2 > a.length) return f;
-
-    f.avgCadence = u16(a,p) / 2;
-
-    p += 2;
-  }
-
-
-  // Bit 4: Total Distance
-  if(flags & (1 << 4)){
-
-    if(p + 3 > a.length) return f;
-
-    f.distance = u24(a,p);
-
-    p += 3;
-  }
-
-
-  // Bit 5: Resistance Level
-  if(flags & (1 << 5)){
-
-    if(p + 2 > a.length) return f;
-
-    f.resistance = s16(a,p);
-
-    p += 2;
-  }
-
-
-  // Bit 6: Instantaneous Power
-  if(flags & (1 << 6)){
-
-    if(p + 2 > a.length) return f;
-
-    f.power = s16(a,p);
-
-    p += 2;
-  }
-
-
-  // Bit 7: Average Power
-  if(flags & (1 << 7)){
-
-    if(p + 2 > a.length) return f;
-
-    f.avgPower = s16(a,p);
-
-    p += 2;
-  }
-
-
-  // Bit 8: Expended Energy
-  if(flags & (1 << 8)){
-
-    if(p + 5 > a.length) return f;
-
-    f.calories = u16(a,p);
-
-    f.energyHour = u16(a,p + 2);
-
-    f.energyMinute = a[p + 4];
-
-    p += 5;
-  }
-
-
-  // Bit 9: Heart Rate
-  if(flags & (1 << 9)){
-
-    if(p + 1 > a.length) return f;
-
-    f.hr = a[p];
-
-    p++;
-  }
-
-
-  // Bit 10: Metabolic Equivalent
-  if(flags & (1 << 10)){
-
-    if(p + 1 > a.length) return f;
-
-    f.met = a[p] / 10;
-
-    p++;
-  }
-
-
-  // Bit 11: Elapsed Time
-  if(flags & (1 << 11)){
-
-    if(p + 2 > a.length) return f;
-
-    f.elapsed = u16(a,p);
-
-    p += 2;
-  }
-
-
-  // Bit 12: Remaining Time
-  if(flags & (1 << 12)){
-
-    if(p + 2 > a.length) return f;
-
-    f.remaining = u16(a,p);
-
-    p += 2;
-  }
-
-
-  f.bytesConsumed = p;
-  f.trailing = a.length - p;
-
-  return f;
+  const a=new Uint8Array(buf);if(a.length<2)return null;const flags=new DataView(buf).getUint16(0,true),f={flags,raw:Array.from(a)};let p=2;
+  if(!(flags&1)){if(p+2>a.length)return f;f.speed=u16(a,p)/100;p+=2}
+  if(flags&(1<<1)){if(p+2>a.length)return f;f.avgSpeed=u16(a,p)/100;p+=2}
+  if(flags&(1<<2)){if(p+2>a.length)return f;f.cadence=u16(a,p)/2;p+=2}
+  if(flags&(1<<3)){if(p+2>a.length)return f;f.avgCadence=u16(a,p)/2;p+=2}
+  if(flags&(1<<4)){if(p+3>a.length)return f;f.distance=u24(a,p);p+=3}
+  if(flags&(1<<5)){if(p+2>a.length)return f;f.resistance=s16(a,p)/10;p+=2}
+  if(flags&(1<<6)){if(p+2>a.length)return f;f.power=s16(a,p);p+=2}
+  if(flags&(1<<7)){if(p+2>a.length)return f;f.avgPower=s16(a,p);p+=2}
+  if(flags&(1<<8)){if(p+5>a.length)return f;f.calories=u16(a,p);f.energyHour=u16(a,p+2);f.energyMinute=a[p+4];p+=5}
+  if(flags&(1<<9)){if(p+1>a.length)return f;f.hr=a[p++]}
+  if(flags&(1<<10)){if(p+1>a.length)return f;f.met=a[p++]/10}
+  if(flags&(1<<11)){if(p+2>a.length)return f;f.elapsed=u16(a,p);p+=2}
+  if(flags&(1<<12)){if(p+2>a.length)return f;f.remaining=u16(a,p);p+=2}
+  f.bytesConsumed=p;f.trailing=a.length-p;return f;
 }
 
-
-/*
- * IMPORTANTE PARA TU BICI:
- *
- * Las notificaciones llegan en dos paquetes alternados.
- *
- * Por eso NO hacemos:
- *
- * lastFields = f;
- *
- * sino que mezclamos únicamente los campos
- * presentes en el paquete actual.
- */
-
-function mergeFields(f){
-
-  for(const [k,v] of Object.entries(f || {})){
-
-    if(
-      k !== 'raw' &&
-      k !== 'flags' &&
-      v !== undefined
-    ){
-
-      lastFields[k] = v;
-    }
-
-  }
-
-  lastPacket = f?.raw || lastPacket;
-
-  updateUI();
+function openDB(){
+  if(dbPromise)return dbPromise;
+  dbPromise=new Promise((resolve,reject)=>{
+    const r=indexedDB.open(DB_NAME,DB_VERSION);
+    r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains(SESSION_STORE)){const s=db.createObjectStore(SESSION_STORE,{keyPath:'id'});s.createIndex('start','start')}if(!db.objectStoreNames.contains(ACTIVE_STORE))db.createObjectStore(ACTIVE_STORE,{keyPath:'id'})};
+    r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
+  });return dbPromise;
 }
+async function dbPut(store,obj){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).put(obj);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)})}
+async function dbGet(store,id){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(store,'readonly');const r=tx.objectStore(store).get(id);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error)})}
+async function dbDelete(store,id){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).delete(id);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)})}
+async function dbAll(){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(SESSION_STORE,'readonly');const r=tx.objectStore(SESSION_STORE).getAll();r.onsuccess=()=>res(r.result.sort((a,b)=>b.start-a.start));r.onerror=()=>rej(r.error)})}
+async function dbClear(){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(SESSION_STORE,'readwrite');tx.objectStore(SESSION_STORE).clear();tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)})}
 
+function mergeFields(f){for(const [k,v] of Object.entries(f||{}))if(!['raw','flags'].includes(k)&&v!==undefined)lastFields[k]=v;lastPacket=f?.raw||lastPacket;updateUI()}
+function updateUI(){const f=lastFields;$('power').textContent=fmt(f.power);$('speed').textContent=fmt(f.speed,1);$('cadence').textContent=fmt(f.cadence,1);$('resistance').textContent=fmt(f.resistance,1);$('distance').textContent=session?fmt(session.distanceKm,2):f.distance!=null?fmt(f.distance/1000,2):'—';$('calories').textContent=fmt(f.calories);$('avgPower').textContent=session?fmt(calcStats(session.samples).avgPower):'—';$('elapsed').textContent=fmtTime(session?.elapsedSec||0);$('raw').textContent=lastPacket.length?lastPacket.map(x=>x.toString(16).padStart(2,'0')).join(' '):'—'}
 
-function updateUI(){
-
-  const f = lastFields;
-
-  $('power').textContent =
-    fmt(f.power);
-
-  $('speed').textContent =
-    fmt(f.speed,1);
-
-  $('cadence').textContent =
-    fmt(f.cadence,1);
-
-  $('resistance').textContent =
-    fmt(f.resistance);
-
-  $('distance').textContent =
-    f.distance == null
-      ? '—'
-      : fmt(f.distance / 1000,2);
-
-  $('calories').textContent =
-    fmt(f.calories);
-
-  $('avgPower').textContent =
-    fmt(f.avgPower);
-
-  $('elapsed').textContent =
-    fmtTime(
-      f.elapsed ||
-      (session?.start
-        ? (Date.now() - session.start) / 1000
-        : 0)
-    );
-
-  $('raw').textContent =
-    lastPacket.length
-      ? lastPacket
-          .map(x => x.toString(16).padStart(2,'0'))
-          .join(' ')
-      : '—';
+function calcStats(samples){
+  const valid=(key)=>samples.map(s=>s[key]).filter(v=>Number.isFinite(v));
+  const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null,max=a=>a.length?Math.max(...a):null;
+  const p=valid('power'),v=valid('speed'),c=valid('cadence');
+  return {avgPower:avg(p),maxPower:max(p),avgSpeed:avg(v),maxSpeed:max(v),avgCadence:avg(c),maxCadence:max(c),powerCount:p.length};
 }
-
-
-/*
- * Gráfico de potencia.
- *
- * Conservamos solamente los últimos
- * 10 minutos.
- */
-
-function samplePower(){
-
-  const p = lastFields.power;
-
-  if(p == null){
-    return;
-  }
-
-  const now = Date.now();
-
-  powerSamples.push({
-    t:now,
-    p
-  });
-
-  powerSamples =
-    powerSamples.filter(
-      x => now - x.t <= 600000
-    );
-
-  drawChart();
+function makeSample(){
+  const f=lastFields;let speed=Number.isFinite(f.speed)?f.speed:null,cadence=Number.isFinite(f.cadence)?f.cadence:null,power=Number.isFinite(f.power)?f.power:null,resistance=Number.isFinite(f.resistance)?f.resistance:null;
+  if(f.distance!=null&&Number.isFinite(f.distance))session.distanceKm=Math.max(session.distanceKm,f.distance/1000);else if(speed!=null)session.distanceKm+=Math.max(0,speed)/3600;
+  session.elapsedSec+=1;
+  const s={t:session.elapsedSec,power,speed,cadence,resistance,distanceKm:session.distanceKm,calories:Number.isFinite(f.calories)?f.calories:null};
+  session.samples.push(s);session.lastUpdated=Date.now();return s;
 }
-
-
-function drawChart(){
-
-  const c = $('chart');
-
-  const dpr =
-    window.devicePixelRatio || 1;
-
-  const r =
-    c.getBoundingClientRect();
-
-  c.width =
-    Math.max(1,r.width * dpr);
-
-  c.height =
-    Math.max(1,r.height * dpr);
-
-  const x =
-    c.getContext('2d');
-
-  x.scale(dpr,dpr);
-
-  const w = r.width;
-  const h = r.height;
-
-  x.clearRect(0,0,w,h);
-
-
-  // Grid
-
-  x.strokeStyle = '#272d34';
-  x.lineWidth = 1;
-
-  for(let i=0;i<5;i++){
-
-    const y =
-      20 +
-      i * (h - 35) / 4;
-
-    x.beginPath();
-
-    x.moveTo(0,y);
-    x.lineTo(w,y);
-
-    x.stroke();
-  }
-
-
-  if(!powerSamples.length){
-    return;
-  }
-
-
-  const now = Date.now();
-
-  const max =
-    Math.max(
-      100,
-      ...powerSamples.map(q => q.p)
-    );
-
-
-  x.strokeStyle = '#65d68a';
-  x.lineWidth = 2;
-
-  x.beginPath();
-
-
-  powerSamples.forEach((q,i) => {
-
-    const xx =
-      w -
-      (now - q.t) / 600000 * w;
-
-    const yy =
-      h -
-      12 -
-      (Math.max(0,q.p) / max) *
-      (h - 28);
-
-    if(i){
-      x.lineTo(xx,yy);
-    }else{
-      x.moveTo(xx,yy);
-    }
-
-  });
-
-  x.stroke();
-
-
-  x.fillStyle = '#89929d';
-  x.font = '11px system-ui';
-
-  x.fillText(
-    `${Math.round(max)} W`,
-    5,
-    14
-  );
-
-  x.fillText(
-    '10 min',
-    w - 45,
-    h - 3
-  );
-}
-
-
-window.addEventListener(
-  'resize',
-  drawChart
-);
-
-
-/*
- * Sesiones
- */
-
-function startSession(){
-
-  if(session){
-    return;
-  }
-
-  session = {
-    id:Date.now(),
-    start:Date.now(),
-    device:device?.name || 'FTMS Bike'
-  };
-
-  lastFields = {};
-  powerSamples = [];
-
-  updateUI();
-
-  $('finish').disabled = false;
-}
-
-
-function finishSession(){
-
-  if(!session){
-    return;
-  }
-
-  const f = lastFields;
-
-  const duration =
-    f.elapsed ||
-    Math.round(
-      (Date.now() - session.start) / 1000
-    );
-
-
-  const item = {
-
-    ...session,
-
-    end:Date.now(),
-
-    duration,
-
-    power:f.power ?? null,
-
-    avgPower:f.avgPower ?? null,
-
-    speed:f.speed ?? null,
-
-    cadence:f.cadence ?? null,
-
-    distance:
-      f.distance != null
-        ? f.distance / 1000
-        : null,
-
-    calories:f.calories ?? null
-
-  };
-
-
-  const hist =
-    JSON.parse(
-      localStorage.getItem(HISTORY_KEY) || '[]'
-    );
-
-
-  hist.unshift(item);
-
-
-  localStorage.setItem(
-    HISTORY_KEY,
-    JSON.stringify(
-      hist.slice(0,100)
-    )
-  );
-
-
-  session = null;
-
-  $('finish').disabled = true;
-
-  renderHistory();
-}
-
-
-function renderHistory(){
-
-  const h =
-    JSON.parse(
-      localStorage.getItem(HISTORY_KEY) || '[]'
-    );
-
-  const el =
-    $('historyList');
-
-
-  el.innerHTML =
-    h.length
-
-      ? h.map(x => `
-
-        <div class="session">
-
-          <div>
-
-            <b>
-              ${new Date(x.start).toLocaleString()}
-            </b>
-
-            <br>
-
-            <small>
-
-              ${fmtTime(x.duration)}
-              ·
-              ${
-                x.distance == null
-                  ? '—'
-                  : fmt(x.distance,2) + ' km'
-              }
-              ·
-              ${x.calories ?? '—'} kcal
-
-            </small>
-
-          </div>
-
-
-          <div style="text-align:right">
-
-            <b>
-              ${x.avgPower ?? '—'} W
-            </b>
-
-            <br>
-
-            <small>
-              prom.
-            </small>
-
-          </div>
-
-        </div>
-
-      `).join('')
-
-      :
-
-      '<div class="notice">No hay sesiones guardadas.</div>';
-}
-
-
-/*
- * Wake Lock API
- */
-
-async function requestWakeLock(){
-
-  try{
-
-    if('wakeLock' in navigator){
-
-      wakeLock =
-        await navigator.wakeLock.request(
-          'screen'
-        );
-
-      $('wakeBtn').textContent =
-        'Pantalla activa';
-
-
-      wakeLock.addEventListener(
-        'release',
-        () => {
-
-          $('wakeBtn').textContent =
-            'Pantalla';
-
-        }
-      );
-
-    }
-
-  }catch(e){
-
-    console.log(
-      'Wake Lock no disponible',
-      e
-    );
-
-  }
-}
-
-
-document.addEventListener(
-  'visibilitychange',
-  () => {
-
-    if(
-      document.visibilityState === 'visible' &&
-      session
-    ){
-
-      requestWakeLock();
-
-    }
-
-  }
-);
-
-
-/*
- * Conexión Web Bluetooth
- */
-
-async function connect(
-  reconnect = false
-){
-
-  if(!navigator.bluetooth){
-
-    alert(
-      'Este navegador no soporta Web Bluetooth. ' +
-      'En Android, prueba Chrome y sirve esta página por HTTPS o desde localhost.'
-    );
-
-    return;
-  }
-
-
-  try{
-
-    /*
-     * Primera conexión:
-     *
-     * requestDevice necesita interacción
-     * del usuario.
-     *
-     * Las reconexiones posteriores utilizan
-     * el mismo dispositivo.
-     */
-
-    if(
-      !device ||
-      !reconnect
-    ){
-
-      device =
-        await navigator.bluetooth.requestDevice({
-
-          filters:[
-            {
-              services:[
-                SERVICE_UUID
-              ]
-            }
-          ],
-
-          optionalServices:[
-            SERVICE_UUID
-          ]
-
-        });
-
-    }
-
-
-    device.addEventListener(
-      'gattserverdisconnected',
-      onDisconnected,
-      {once:true}
-    );
-
-
-    $('status').textContent =
-      'Conectando…';
-
-
-    const server =
-      await device.gatt.connect();
-
-
-    const service =
-      await server.getPrimaryService(
-        SERVICE_UUID
-      );
-
-
-    characteristic =
-      await service.getCharacteristic(
-        DATA_UUID
-      );
-
-
-    await characteristic.startNotifications();
-
-
-    characteristic.addEventListener(
-      'characteristicvaluechanged',
-      onData
-    );
-
-
-    $('dot').classList.add('on');
-
-    $('status').textContent =
-      device.name || 'Conectada';
-
-
-    startSession();
-
-    requestWakeLock();
-
-  }catch(e){
-
-    console.error(e);
-
-    $('status').textContent =
-      'Error: ' +
-      (e.message || e);
-
-    $('dot').classList.remove('on');
-
-  }
-
-}
-
-
-/*
- * Datos FTMS
- */
-
-function onData(ev){
-
-  const f =
-    parseFTMS(
-      ev.target.value.buffer
-    );
-
-  if(!f){
-    return;
-  }
-
-  mergeFields(f);
-}
-
-
-/*
- * Desconexión y reconexión automática
- */
-
-function onDisconnected(){
-
-  $('dot').classList.remove('on');
-
-  $('status').textContent =
-    'Desconectada — reconectando…';
-
-  characteristic = null;
-
-
-  clearTimeout(
-    reconnectTimer
-  );
-
-
-  reconnectTimer =
-    setTimeout(
-      () => {
-
-        if(
-          device?.gatt &&
-          !device.gatt.connected
-        ){
-
-          connect(true);
-
-        }
-
-      },
-      1200
-    );
-}
-
-
-/*
- * Botones
- */
-
-$('connect').onclick =
-  () => connect(false);
-
-
-$('finish').onclick =
-  () => finishSession();
-
-
-$('wakeBtn').onclick =
-  requestWakeLock;
-
-
-/*
- * Actualización del reloj
- */
-
-setInterval(
-  () => {
-
-    if(session){
-
-      $('elapsed').textContent =
-        fmtTime(
-          lastFields.elapsed ||
-          (Date.now() - session.start) / 1000
-        );
-
-    }
-
-  },
-  1000
-);
-
-
-/*
- * Muestreo gráfico
- */
-
-setInterval(
-  samplePower,
-  1000
-);
-
-
-/*
- * Inicialización
- */
-
-renderHistory();
-drawChart();
-
+async function persistActive(){if(!session)return;await dbPut(ACTIVE_STORE,{id:'active',...session})}
+function startSampling(){stopSampling();sampleTimer=setInterval(async()=>{if(!session||!characteristic||!device?.gatt?.connected)return;makeSample();updateUI();await persistActive();drawLiveChart()},1000)}
+function stopSampling(){if(sampleTimer){clearInterval(sampleTimer);sampleTimer=null}}
+async function startNewSession(){session={id:Date.now(),start:Date.now(),device:device?.name||'FTMS Bike',elapsedSec:0,distanceKm:0,samples:[],lastUpdated:Date.now()};lastFields={};powerSamples=[];await persistActive();$('finish').disabled=false;startSampling();requestWakeLock();updateUI()}
+async function continueRecovered(s){session=s;lastFields={};$('resumeBox').classList.add('hidden');$('finish').disabled=false;updateUI();if(device?.gatt?.connected)startSampling()}
+async function finishSession(){if(!session)return;stopSampling();const stats=calcStats(session.samples);const final={...session,end:Date.now(),duration:session.elapsedSec,avgPower:stats.avgPower,maxPower:stats.maxPower,avgSpeed:stats.avgSpeed,maxSpeed:stats.maxSpeed,avgCadence:stats.avgCadence,maxCadence:stats.maxCadence,calories:lastFields.calories??session.samples.at(-1)?.calories??null};await dbPut(SESSION_STORE,final);await dbDelete(ACTIVE_STORE,'active');session=null;$('finish').disabled=true;updateUI();await renderHistory()}
+
+function drawCanvas(canvas, samples,key,unit,label){
+  const dpr=devicePixelRatio||1,r=canvas.getBoundingClientRect(),w=r.width,h=r.height;canvas.width=Math.max(1,w*dpr);canvas.height=Math.max(1,h*dpr);const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);ctx.strokeStyle='#272d34';ctx.lineWidth=1;for(let i=0;i<5;i++){const y=18+i*(h-32)/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}const pts=samples.filter(s=>Number.isFinite(s[key]));if(!pts.length)return;const max=Math.max(1,...pts.map(s=>s[key]));const min=Math.min(0,...pts.map(s=>s[key]));const range=Math.max(1,max-min);ctx.strokeStyle='#65d68a';ctx.lineWidth=2;ctx.beginPath();pts.forEach((s,i)=>{const x=(s.t/(Math.max(1,samples.at(-1).t)))*w;const y=h-12-((s[key]-min)/range)*(h-28);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();ctx.fillStyle='#89929d';ctx.font='11px system-ui';ctx.fillText(`${Math.round(max)} ${unit}`,5,13);ctx.fillText(label,w-55,h-3)}
+function drawLiveChart(){const now=Date.now();powerSamples=powerSamples.filter(x=>now-x.t<=600000);const c=$('liveChart');const samples=powerSamples.length?powerSamples.map(x=>({t:Math.max(0,600000-(now-x.t))/1000,power:x.p})):[];drawCanvas(c,samples,'power','W','10 min')}
+function addLivePower(){if(Number.isFinite(lastFields.power)){powerSamples.push({t:Date.now(),p:lastFields.power});powerSamples=powerSamples.slice(-700);drawLiveChart()}}
+
+function zoneData(samples){const zones=[['Z1 recuperación',0,.55],['Z2 aeróbica',.55,.75],['Z3 tempo',.75,.90],['Z4 umbral',.90,1.05],['Z5 VO₂',1.05,1.20],['Z6 anaeróbica',1.20,1.50],['Z7 neuromuscular',1.50,Infinity]];const secs=Array(zones.length).fill(0);samples.forEach(s=>{if(!Number.isFinite(s.power))return;const z=zones.findIndex((q,i)=>s.power<ftpW*q[2]&&s.power>=ftpW*q[1]);if(z>=0)secs[z]+=1});return zones.map((z,i)=>({name:z[0],min:z[1],max:z[2],sec:secs[i]}))}
+function splitData(samples){if(!samples.length)return[];const hasDist=samples.some(s=>Number.isFinite(s.distanceKm)&&s.distanceKm>0);const out=[];if(hasDist){let next=1,start=0;for(let i=0;i<samples.length;i++){if(samples[i].distanceKm>=next){out.push(splitStats(samples.slice(start,i+1),next-1,next));start=i+1;next=Math.floor(samples[i].distanceKm)+1}}if(start<samples.length)out.push(splitStats(samples.slice(start),next-1,null));}else{for(let start=0;start<samples.length;start+=300)out.push(splitStats(samples.slice(start,start+300),samples[start].t/60,Math.min(samples.at(-1).t,(samples[start+299]||samples.at(-1)).t)/60))}return out}
+function splitStats(a,from,to){const st=calcStats(a);return {label:to==null?(from+'+'):to===Math.ceil(from)?`Km ${Math.max(1,Math.ceil(from))}`:`Km ${Math.max(1,Math.floor(from)+1)}`,duration:a.length,from,to,avgPower:st.avgPower,avgSpeed:st.avgSpeed,avgCadence:st.avgCadence,distance:a.at(-1)?.distanceKm??null}}
+
+function chartDetail(canvas,samples,key,unit){drawCanvas(canvas,samples,key,unit,'');canvas.addEventListener('pointerdown',e=>showChartValue(e,canvas,samples,key,unit));canvas.addEventListener('pointermove',e=>{if(e.buttons)showChartValue(e,canvas,samples,key,unit)});canvas.addEventListener('pointerleave',()=>{$('tooltip').classList.add('hidden')})}
+function showChartValue(e,canvas,samples,key,unit){const r=canvas.getBoundingClientRect(),ratio=clamp((e.clientX-r.left)/r.width,0,1),t=ratio*(samples.at(-1)?.t||0);let best=samples[0];for(const s of samples){if(Math.abs(s.t-t)<Math.abs(best.t-t))best=s}if(!best)return;const tip=$('tooltip');tip.innerHTML=`<b>${fmtTime(best.t)}</b> · ${fmt(best[key],key==='cadence'||key==='speed'?1:0)} ${unit}`;tip.style.left=Math.min(window.innerWidth-150,Math.max(8,e.clientX+8))+'px';tip.style.top=Math.max(8,e.clientY-45)+'px';tip.classList.remove('hidden')}
+
+async function renderHistory(){const list=await dbAll();const el=$('historyList');if(!list.length){el.innerHTML='<div class="empty">No hay sesiones guardadas.</div>';return}el.innerHTML=list.map(s=>`<div class="session-row" data-id="${s.id}"><div><b>${new Date(s.start).toLocaleString()}</b><br><small>${fmtTime(s.duration)} · ${s.distanceKm==null?'—':fmt(s.distanceKm,2)+' km'} · ${s.calories??'—'} kcal</small></div><div class="row-actions"><div style="text-align:right"><b>${fmt(s.avgPower)} W</b><br><small>prom.</small></div><button class="smallbtn danger deleteOne" data-id="${s.id}">×</button></div></div>`).join('');el.querySelectorAll('.session-row').forEach(r=>r.onclick=e=>{if(e.target.closest('.deleteOne'))return;openDetail(Number(r.dataset.id))});el.querySelectorAll('.deleteOne').forEach(b=>b.onclick=async e=>{e.stopPropagation();if(confirm('¿Borrar esta sesión?')){await dbDelete(SESSION_STORE,Number(b.dataset.id));renderHistory()}})}
+
+async function openDetail(id){const list=await dbAll();detailSession=list.find(x=>x.id===id);if(!detailSession)return;ftpW=Number(localStorage.getItem(FTP_KEY)||200);$('liveScreen').classList.add('hidden');$('historyNav').classList.add('hidden');$('historyScreen').classList.add('hidden');$('detailScreen').classList.remove('hidden');$('detailTitle').textContent=new Date(detailSession.start).toLocaleString();renderDetail()}
+function renderDetail(){const s=detailSession,st=calcStats(s.samples),zones=zoneData(s.samples),splits=splitData(s.samples),total=Math.max(1,s.samples.length);$('detailContent').innerHTML=`<div class="card"><div class="summarygrid"><div class="summaryitem"><div class="v">${fmtTime(s.duration)}</div><div class="l">Duración</div></div><div class="summaryitem"><div class="v">${fmt(s.distanceKm,2)} km</div><div class="l">Distancia</div></div><div class="summaryitem"><div class="v">${s.calories??'—'}</div><div class="l">kcal</div></div><div class="summaryitem"><div class="v">${fmt(st.avgPower)} / ${fmt(st.maxPower)} W</div><div class="l">Potencia prom. / máx.</div></div><div class="summaryitem"><div class="v">${fmt(st.avgSpeed,1)} km/h</div><div class="l">Velocidad promedio</div></div><div class="summaryitem"><div class="v">${fmt(st.avgCadence,1)} rpm</div><div class="l">Cadencia promedio</div></div><div class="summaryitem"><div class="v">${fmt(st.maxSpeed,1)} km/h</div><div class="l">Velocidad máxima</div></div><div class="summaryitem"><div class="v">${fmt(st.maxCadence,1)} rpm</div><div class="l">Cadencia máxima</div></div></div></div>
+<div class="card detail-chart"><div class="chart-title">Potencia <span>${fmt(st.avgPower)} W promedio</span></div><canvas id="dp"></canvas><div class="chart-hint">Toca o desliza sobre el gráfico para ver el valor de ese momento.</div></div>
+<div class="card detail-chart"><div class="chart-title">Cadencia</div><canvas id="dc"></canvas></div>
+<div class="card detail-chart"><div class="chart-title">Velocidad</div><canvas id="ds"></canvas></div>
+<div class="card zones"><div class="chart-title">Zonas de potencia <span>FTP <span id="ftpLabel">${ftpW}</span> W</span></div><div class="settings" style="margin:10px 0"><span>FTP para calcular zonas</span><input id="ftpInput" type="number" min="1" step="1" value="${ftpW}"></div><table><thead><tr><th>Zona</th><th>Tiempo</th><th>%</th></tr></thead><tbody>${zones.map(z=>`<tr><td>${z.name}</td><td>${fmtTime(z.sec)}</td><td>${fmt(z.sec/total*100,0)}%</td></tr>`).join('')}</tbody></table></div>
+<div class="card splits"><div class="chart-title">Parciales</div><table><thead><tr><th>Parcial</th><th>Tiempo</th><th>W prom.</th><th>km/h</th><th>rpm</th></tr></thead><tbody>${splits.map((q,i)=>`<tr><td>${hasDistance(s.samples)?(i+1)+' km':fmt(q.from,1)+'–'+fmt(q.to,1)+' min'}</td><td>${fmtTime(q.duration)}</td><td>${fmt(q.avgPower)}</td><td>${fmt(q.avgSpeed,1)}</td><td>${fmt(q.avgCadence,1)}</td></tr>`).join('')}</tbody></table></div>
+<div class="card"><div class="chart-title">Exportar / borrar</div><div class="export-row"><button class="primary" id="exportDetail">⬇ CSV</button><button class="danger" id="deleteDetail">Borrar sesión</button></div></div>`;
+  chartDetail($('dp'),s.samples,'power','W');chartDetail($('dc'),s.samples,'cadence','rpm');chartDetail($('ds'),s.samples,'speed','km/h');$('ftpInput').onchange=()=>{ftpW=clamp(Number($('ftpInput').value)||200,1,2000);localStorage.setItem(FTP_KEY,ftpW);renderDetail()};$('exportDetail').onclick=()=>exportCSV(s);$('deleteDetail').onclick=async()=>{if(confirm('¿Borrar esta sesión?')){await dbDelete(SESSION_STORE,s.id);backToHistory()}}}
+function hasDistance(samples){return samples.some(s=>Number.isFinite(s.distanceKm)&&s.distanceKm>0)}
+
+function csvEscape(v){const s=String(v??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+function exportCSV(s){const rows=[['time_s','power_W','speed_kmh','cadence_rpm','resistance','distance_km','calories']];s.samples.forEach(x=>rows.push([x.t,x.power,x.speed,x.cadence,x.resistance,x.distanceKm,x.calories]));const blob=new Blob([rows.map(r=>r.map(csvEscape).join(',')).join('\n')],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`ftms-${new Date(s.start).toISOString().replace(/[:.]/g,'-')}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+
+function showHistory(){renderHistory();$('liveScreen').classList.add('hidden');$('detailScreen').classList.add('hidden');$('historyScreen').classList.remove('hidden');$('historyNav').classList.add('hidden')}
+function backToLive(){$('historyScreen').classList.add('hidden');$('detailScreen').classList.add('hidden');$('liveScreen').classList.remove('hidden');$('historyNav').classList.remove('hidden')}
+function backToHistory(){$('detailScreen').classList.add('hidden');$('historyScreen').classList.remove('hidden');renderHistory()}
+
+async function requestWakeLock(){try{if('wakeLock'in navigator){wakeLock=await navigator.wakeLock.request('screen');$('wakeBtn').textContent='Pantalla activa';wakeLock.addEventListener('release',()=>{$('wakeBtn').textContent='Pantalla'})}}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&session)requestWakeLock()});
+
+async function connect(reconnect=false){if(!navigator.bluetooth){alert('Este navegador no soporta Web Bluetooth. En Android, prueba Chrome y sirve esta página por HTTPS o desde localhost.');return}try{if(!device||!reconnect)device=await navigator.bluetooth.requestDevice({filters:[{services:[SERVICE_UUID]}],optionalServices:[SERVICE_UUID]});device.addEventListener('gattserverdisconnected',onDisconnected,{once:true});$('status').textContent='Conectando…';const server=await device.gatt.connect();const service=await server.getPrimaryService(SERVICE_UUID);characteristic=await service.getCharacteristic(DATA_UUID);await characteristic.startNotifications();characteristic.addEventListener('characteristicvaluechanged',onData);$('dot').classList.add('on');$('status').textContent=device.name||'Conectada';if(!session)await startNewSession();else{await persistActive();startSampling()}requestWakeLock()}catch(e){console.error(e);$('status').textContent='Error: '+(e.message||e);$('dot').classList.remove('on')}}
+function onData(ev){const f=parseFTMS(ev.target.value.buffer);if(!f)return;mergeFields(f);addLivePower()}
+function onDisconnected(){$('dot').classList.remove('on');$('status').textContent='Desconectada — reconectando…';characteristic=null;stopSampling();clearTimeout(reconnectTimer);reconnectTimer=setTimeout(()=>{if(device?.gatt&&!device.gatt.connected)connect(true)},1200)}
+
+async function checkRecovery(){const a=await dbGet(ACTIVE_STORE,'active');if(!a)return;session=a;$('resumeBox').classList.remove('hidden');$('resumeText').textContent=`${fmtTime(a.elapsedSec)} · ${fmt(a.distanceKm,2)} km · ${a.samples.length} muestras guardadas. Puedes continuar cuando vuelvas a conectar la bici.`;$('finish').disabled=false;updateUI()}
+
+$('connect').onclick=()=>connect(false);$('finish').onclick=()=>finishSession();$('wakeBtn').onclick=requestWakeLock;$('openHistory').onclick=showHistory;$('backFromHistory').onclick=backToLive;$('backFromDetail').onclick=backToHistory;$('resumeBtn').onclick=async()=>{if(!session)return;$('resumeBox').classList.add('hidden');await connect(false)};$('discardActive').onclick=async()=>{if(confirm('¿Descartar la sesión recuperada?')){await dbDelete(ACTIVE_STORE,'active');session=null;$('resumeBox').classList.add('hidden');$('finish').disabled=true;updateUI()}};$('clearHistory').onclick=async()=>{if(confirm('¿Borrar todo el historial?')){await dbClear();renderHistory()}};
+setInterval(()=>{if(session){$('elapsed').textContent=fmtTime(session.elapsedSec);$('avgPower').textContent=fmt(calcStats(session.samples).avgPower)}},1000);
+(async()=>{try{await openDB();await checkRecovery()}catch(e){console.error('IndexedDB',e)}drawLiveChart()})();
 </script>
-
 </body>
-  </html>
+</html>
