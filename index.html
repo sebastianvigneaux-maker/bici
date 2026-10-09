@@ -40,6 +40,12 @@ button{border:0;border-radius:12px;background:#252b32;color:var(--text);padding:
 <details><summary>Bytes crudos del último paquete</summary><div id="raw" class="raw">—</div></details>
 </section>
 
+<section id="accountCard" class="card" style="margin-top:10px">
+<div class="chart-title">Sincronización privada <span id="syncStatus">Solo en este dispositivo</span></div>
+<div class="export-row" style="margin-top:10px"><input id="authEmail" type="email" autocomplete="email" placeholder="Tu correo" aria-label="Correo electrónico" style="flex:1;min-width:180px;background:#0b0d10;border:1px solid var(--line);color:var(--text);padding:10px;border-radius:9px"><button id="signIn" class="blue">Enviar enlace</button><button id="signOut" class="smallbtn hidden">Cerrar sesión</button></div>
+<div id="authMessage" class="notice" aria-live="polite">Configura Supabase para activar la sincronización. Las sesiones se siguen guardando localmente.</div>
+</section>
+
 <section id="historyScreen" class="hidden">
 <div class="screen-title"><button class="back" id="backFromHistory">←</button><h2>Historial</h2></div>
 <div id="historyList"></div>
@@ -54,16 +60,20 @@ button{border:0;border-radius:12px;background:#252b32;color:var(--text);padding:
 </main>
 <div id="tooltip" class="tooltip hidden"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
+<script src="supabase-config.js"></script>
 <script>
 'use strict';
 
 const SERVICE_UUID=0x1826, DATA_UUID=0x2AD2;
-const DB_NAME='ftms-bike-db-v2', DB_VERSION=1;
+const DB_NAME='ftms-bike-db-v2', DB_VERSION=3;
 const SESSION_STORE='sessions', ACTIVE_STORE='active';
 const FTP_KEY='ftms-bike-ftp';
+const SUPABASE_URL=window.FTMS_SUPABASE_URL||'', SUPABASE_KEY=window.FTMS_SUPABASE_PUBLISHABLE_KEY||'';
+const supabase=SUPABASE_URL&&SUPABASE_KEY&&window.supabase?window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY):null;
 let device=null, characteristic=null, wakeLock=null, reconnectTimer=null;
 let session=null, lastFields={}, lastPacket=[], powerSamples=[];
-let sampleTimer=null, dbPromise=null, detailSession=null;
+let sampleTimer=null, dbPromise=null, detailSession=null, authUser=null, syncRunning=false, syncAgain=false;
 let ftpW=Number(localStorage.getItem(FTP_KEY)||200);
 const $=id=>document.getElementById(id);
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -95,15 +105,69 @@ function openDB(){
   if(dbPromise)return dbPromise;
   dbPromise=new Promise((resolve,reject)=>{
     const r=indexedDB.open(DB_NAME,DB_VERSION);
-    r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains(SESSION_STORE)){const s=db.createObjectStore(SESSION_STORE,{keyPath:'id'});s.createIndex('start','start')}if(!db.objectStoreNames.contains(ACTIVE_STORE))db.createObjectStore(ACTIVE_STORE,{keyPath:'id'})};
+    r.onupgradeneeded=event=>{
+      const db=r.result,tx=r.transaction,oldVersion=event.oldVersion;
+      let sessions;
+      if(!db.objectStoreNames.contains(SESSION_STORE)){sessions=db.createObjectStore(SESSION_STORE,{keyPath:'id'});sessions.createIndex('start','start')}
+      else sessions=tx.objectStore(SESSION_STORE);
+      let active;
+      if(!db.objectStoreNames.contains(ACTIVE_STORE))active=db.createObjectStore(ACTIVE_STORE,{keyPath:'id'});
+      else active=tx.objectStore(ACTIVE_STORE);
+      if(oldVersion<3){
+        const migrateSessions=sessions.openCursor();
+        migrateSessions.onsuccess=()=>{
+          const c=migrateSessions.result;if(!c)return;
+          const v=c.value;let changed=false;
+          if(typeof v.ownerId!=='string'){v.ownerId=null;changed=true}
+          if(typeof v.syncState!=='string'){v.syncState=v.ownerId?'pending':'local';changed=true}
+          if(changed)c.update(v);
+          c.continue();
+        };
+        let sessionKeys=null,activeRows=null;
+        const promoteRecoverableActive=()=>{
+          if(!sessionKeys||!activeRows)return;
+          const completedKeys=new Set(sessionKeys);
+          const canonical=activeRows.find(row=>row.id==='active');
+          if(canonical){
+            if(typeof canonical.sessionId==='string'&&completedKeys.has(canonical.sessionId)){active.delete('active');return}
+            if(typeof canonical.sessionId!=='string')active.put({...canonical,sessionId:sessionId(),ownerId:typeof canonical.ownerId==='string'?canonical.ownerId:null});
+            return;
+          }
+          const candidates=activeRows.filter(row=>!completedKeys.has(row.id));
+          if(!candidates.length)return;
+          const recovered=candidates.reduce((best,row)=>!best||(row.lastUpdated||row.start||0)>(best.lastUpdated||best.start||0)?row:best,null);
+          if(!recovered)return;
+          const recoveredId=typeof recovered.sessionId==='string'?recovered.sessionId:typeof recovered.id==='string'?recovered.id:sessionId();
+          active.delete(recovered.id);
+          active.put({...recovered,id:'active',sessionId:recoveredId,ownerId:typeof recovered.ownerId==='string'?recovered.ownerId:null});
+        };
+        const readSessionKeys=sessions.getAllKeys();
+        readSessionKeys.onsuccess=()=>{sessionKeys=readSessionKeys.result||[];promoteRecoverableActive()};
+        const readActive=active.getAll();
+        readActive.onsuccess=()=>{activeRows=readActive.result||[];promoteRecoverableActive()};
+      }
+    };
     r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
   });return dbPromise;
 }
 async function dbPut(store,obj){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).put(obj);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)})}
 async function dbGet(store,id){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(store,'readonly');const r=tx.objectStore(store).get(id);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error)})}
 async function dbDelete(store,id){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).delete(id);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)})}
+async function dbDeleteFinalizedActive(sessionId){const db=await openDB();return new Promise((resolve,reject)=>{const tx=db.transaction([SESSION_STORE,ACTIVE_STORE],'readwrite'),finished=tx.objectStore(SESSION_STORE).get(sessionId),active=tx.objectStore(ACTIVE_STORE).get('active');let finishedRead=false,activeRead=false,deleted=false;const reconcile=()=>{if(!finishedRead||!activeRead)return;if(finished.result&&active.result?.sessionId===sessionId){tx.objectStore(ACTIVE_STORE).delete('active');deleted=true}};finished.onsuccess=()=>{finishedRead=true;reconcile()};active.onsuccess=()=>{activeRead=true;reconcile()};tx.oncomplete=()=>resolve(deleted);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('IndexedDB transaction aborted'))})}
 async function dbAll(){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(SESSION_STORE,'readonly');const r=tx.objectStore(SESSION_STORE).getAll();r.onsuccess=()=>res(r.result.sort((a,b)=>b.start-a.start));r.onerror=()=>rej(r.error)})}
 async function dbClear(){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(SESSION_STORE,'readwrite');tx.objectStore(SESSION_STORE).clear();tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)})}
+async function dbAllStore(storeName){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(storeName,'readonly'),r=tx.objectStore(storeName).getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+const sessionId=()=>crypto.randomUUID();
+function visibleSessions(rows){return rows.filter(s=>s.syncState!=='delete_pending'&&(authUser?(s.ownerId===authUser.id||s.ownerId==null):s.ownerId==null)).sort((a,b)=>b.start-a.start)}
+function sessionDomId(s){return `${typeof s.id}:${String(s.id)}`}
+function setSyncStatus(message){$('syncStatus').textContent=message}
+function setAuthMessage(message){$('authMessage').textContent=message}
+function sessionToRow(s){return{id:s.id,user_id:s.ownerId,started_at:new Date(s.start).toISOString(),updated_at:new Date().toISOString(),payload:s}}
+async function syncSessions(){if(!supabase||!authUser||!navigator.onLine)return;if(syncRunning){syncAgain=true;return}syncRunning=true;setSyncStatus('Sincronizando…');try{const uid=authUser.id,local=await dbAll();for(const s of local){if(s.ownerId!==uid)continue;if(s.syncState==='delete_pending'){const{error}=await supabase.from('training_sessions').delete().eq('id',s.id);if(error)throw error;await dbDelete(SESSION_STORE,s.id);continue}if(s.syncState==='pending'){const{error}=await supabase.from('training_sessions').upsert(sessionToRow(s),{onConflict:'id'});if(error)throw error;s.syncState='synced';await dbPut(SESSION_STORE,s)}}const remote=[];for(let offset=0;;offset+=500){const{data,error}=await supabase.from('training_sessions').select('id,user_id,started_at,payload').order('started_at',{ascending:false}).range(offset,offset+499);if(error)throw error;remote.push(...(data||[]));if(!data||data.length<500)break}const remoteIds=new Set(remote.map(row=>row.id));for(const row of remote){if(row.user_id!==uid)continue;const existing=await dbGet(SESSION_STORE,row.id);if(!existing)await dbPut(SESSION_STORE,{...row.payload,id:row.id,ownerId:uid,syncState:'synced'})}for(const s of local)if(s.ownerId===uid&&s.syncState==='synced'&&!remoteIds.has(s.id))await dbDelete(SESSION_STORE,s.id);setSyncStatus('Sincronizado');await renderHistoryIfOpen()}catch(e){console.error('Supabase sync',e);setSyncStatus(navigator.onLine?'Pendiente de sincronizar':'Sin conexión')}finally{syncRunning=false;if(syncAgain){syncAgain=false;setTimeout(syncSessions,0)}}}
+async function renderHistoryIfOpen(){if(!$('historyScreen').classList.contains('hidden'))await renderHistory()}
+function refreshAuthUI(){const configured=!!supabase;$('authEmail').disabled=!configured||!!authUser;$('signIn').disabled=!configured||!!authUser;$('signOut').classList.toggle('hidden',!authUser);if(!configured){setAuthMessage('Configura el URL y la clave publicable en supabase-config.js. Las sesiones siguen guardándose localmente.');return}if(authUser)setAuthMessage(`Conectado como ${authUser.email||'usuario'}. Las sesiones locales antiguas siguen en este dispositivo y no se sincronizan automáticamente.`);else setAuthMessage('Inicia sesión con el mismo correo en ambos dispositivos para sincronizar. El historial local permanece en este dispositivo.')}
+async function initAuth(){if(!supabase){refreshAuthUI();return}const{data}=await supabase.auth.getSession();authUser=data.session?.user||null;refreshAuthUI();if(authUser)await syncSessions();supabase.auth.onAuthStateChange((_event,s)=>{authUser=s?.user||null;if(detailSession&&detailSession.ownerId!==authUser?.id)backToLive();refreshAuthUI();setTimeout(()=>{if(authUser)syncSessions();else renderHistoryIfOpen()},0)})}
+async function sendSignInLink(){if(!supabase)return;const email=$('authEmail').value.trim();if(!email){setAuthMessage('Escribe tu correo para recibir el enlace.');return}const{error}=await supabase.auth.signInWithOtp({email,options:{emailRedirectTo:location.href}});setAuthMessage(error?`No se pudo enviar el enlace: ${error.message}`:'Revisa tu correo y abre el enlace en este dispositivo para iniciar sesión.')}
 
 function mergeFields(f){for(const [k,v] of Object.entries(f||{}))if(!['raw','flags'].includes(k)&&v!==undefined)lastFields[k]=v;lastPacket=f?.raw||lastPacket;updateUI()}
 function updateUI(){const f=lastFields;$('power').textContent=fmt(f.power);$('speed').textContent=fmt(f.speed,1);$('cadence').textContent=fmt(f.cadence,1);$('resistance').textContent=fmt(f.resistance,1);$('distance').textContent=session?fmt(session.distanceKm,2):f.distance!=null?fmt(f.distance/1000,2):'—';$('calories').textContent=fmt(f.calories);$('avgPower').textContent=session?fmt(calcStats(session.samples).avgPower):'—';$('elapsed').textContent=fmtTime(session?.elapsedSec||0);$('raw').textContent=lastPacket.length?lastPacket.map(x=>x.toString(16).padStart(2,'0')).join(' '):'—'}
@@ -121,12 +185,12 @@ function makeSample(){
   const s={t:session.elapsedSec,power,speed,cadence,resistance,distanceKm:session.distanceKm,calories:Number.isFinite(f.calories)?f.calories:null};
   session.samples.push(s);session.lastUpdated=Date.now();return s;
 }
-async function persistActive(){if(!session)return;await dbPut(ACTIVE_STORE,{id:'active',...session})}
+async function persistActive(){if(!session)return;await dbPut(ACTIVE_STORE,{...session,id:'active',sessionId:session.id})}
 function startSampling(){stopSampling();sampleTimer=setInterval(async()=>{if(!session||!characteristic||!device?.gatt?.connected)return;makeSample();updateUI();await persistActive();drawLiveChart()},1000)}
 function stopSampling(){if(sampleTimer){clearInterval(sampleTimer);sampleTimer=null}}
-async function startNewSession(){session={id:Date.now(),start:Date.now(),device:device?.name||'FTMS Bike',elapsedSec:0,distanceKm:0,samples:[],lastUpdated:Date.now()};lastFields={};powerSamples=[];await persistActive();$('finish').disabled=false;startSampling();requestWakeLock();updateUI()}
+async function startNewSession(){session={id:sessionId(),ownerId:authUser?.id||null,syncState:'local',start:Date.now(),device:device?.name||'FTMS Bike',elapsedSec:0,distanceKm:0,samples:[],lastUpdated:Date.now()};lastFields={};powerSamples=[];await persistActive();$('finish').disabled=false;startSampling();requestWakeLock();updateUI()}
 async function continueRecovered(s){session=s;lastFields={};$('resumeBox').classList.add('hidden');$('finish').disabled=false;updateUI();if(device?.gatt?.connected)startSampling()}
-async function finishSession(){if(!session)return;stopSampling();const stats=calcStats(session.samples);const final={...session,end:Date.now(),duration:session.elapsedSec,avgPower:stats.avgPower,maxPower:stats.maxPower,avgSpeed:stats.avgSpeed,maxSpeed:stats.maxSpeed,avgCadence:stats.avgCadence,maxCadence:stats.maxCadence,calories:lastFields.calories??session.samples.at(-1)?.calories??null};await dbPut(SESSION_STORE,final);await dbDelete(ACTIVE_STORE,'active');session=null;$('finish').disabled=true;updateUI();await renderHistory()}
+async function finishSession(){if(!session)return;stopSampling();const stats=calcStats(session.samples);const final={...session,ownerId:session.ownerId||authUser?.id||null,syncState:(session.ownerId||authUser)?'pending':'local',end:Date.now(),duration:session.elapsedSec,avgPower:stats.avgPower,maxPower:stats.maxPower,avgSpeed:stats.avgSpeed,maxSpeed:stats.maxSpeed,avgCadence:stats.avgCadence,maxCadence:stats.maxCadence,calories:lastFields.calories??session.samples.at(-1)?.calories??null};await dbPut(SESSION_STORE,final);await dbDelete(ACTIVE_STORE,'active');session=null;$('finish').disabled=true;updateUI();await renderHistory();if(navigator.onLine)syncSessions()}
 
 function drawCanvas(canvas, samples,key,unit,label){
   const dpr=devicePixelRatio||1,r=canvas.getBoundingClientRect(),w=r.width,h=r.height;canvas.width=Math.max(1,w*dpr);canvas.height=Math.max(1,h*dpr);const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);ctx.strokeStyle='#272d34';ctx.lineWidth=1;for(let i=0;i<5;i++){const y=18+i*(h-32)/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}const pts=samples.filter(s=>Number.isFinite(s[key]));if(!pts.length)return;const max=Math.max(1,...pts.map(s=>s[key]));const min=Math.min(0,...pts.map(s=>s[key]));const range=Math.max(1,max-min);ctx.strokeStyle='#65d68a';ctx.lineWidth=2;ctx.beginPath();pts.forEach((s,i)=>{const x=(s.t/(Math.max(1,samples.at(-1).t)))*w;const y=h-12-((s[key]-min)/range)*(h-28);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();ctx.fillStyle='#89929d';ctx.font='11px system-ui';ctx.fillText(`${Math.round(max)} ${unit}`,5,13);ctx.fillText(label,w-55,h-3)}
@@ -140,9 +204,11 @@ function splitStats(a,from,to){const st=calcStats(a);return {label:to==null?(fro
 function chartDetail(canvas,samples,key,unit){drawCanvas(canvas,samples,key,unit,'');canvas.addEventListener('pointerdown',e=>showChartValue(e,canvas,samples,key,unit));canvas.addEventListener('pointermove',e=>{if(e.buttons)showChartValue(e,canvas,samples,key,unit)});canvas.addEventListener('pointerleave',()=>{$('tooltip').classList.add('hidden')})}
 function showChartValue(e,canvas,samples,key,unit){const r=canvas.getBoundingClientRect(),ratio=clamp((e.clientX-r.left)/r.width,0,1),t=ratio*(samples.at(-1)?.t||0);let best=samples[0];for(const s of samples){if(Math.abs(s.t-t)<Math.abs(best.t-t))best=s}if(!best)return;const tip=$('tooltip');tip.innerHTML=`<b>${fmtTime(best.t)}</b> · ${fmt(best[key],key==='cadence'||key==='speed'?1:0)} ${unit}`;tip.style.left=Math.min(window.innerWidth-150,Math.max(8,e.clientX+8))+'px';tip.style.top=Math.max(8,e.clientY-45)+'px';tip.classList.remove('hidden')}
 
-async function renderHistory(){const list=await dbAll();const el=$('historyList');if(!list.length){el.innerHTML='<div class="empty">No hay sesiones guardadas.</div>';return}el.innerHTML=list.map(s=>`<div class="session-row" data-id="${s.id}"><div><b>${new Date(s.start).toLocaleString()}</b><br><small>${fmtTime(s.duration)} · ${s.distanceKm==null?'—':fmt(s.distanceKm,2)+' km'} · ${s.calories??'—'} kcal</small></div><div class="row-actions"><div style="text-align:right"><b>${fmt(s.avgPower)} W</b><br><small>prom.</small></div><button class="smallbtn danger deleteOne" data-id="${s.id}">×</button></div></div>`).join('');el.querySelectorAll('.session-row').forEach(r=>r.onclick=e=>{if(e.target.closest('.deleteOne'))return;openDetail(Number(r.dataset.id))});el.querySelectorAll('.deleteOne').forEach(b=>b.onclick=async e=>{e.stopPropagation();if(confirm('¿Borrar esta sesión?')){await dbDelete(SESSION_STORE,Number(b.dataset.id));renderHistory()}})}
+async function deleteSession(s){if(s.ownerId&&s.syncState!=='local'){s.syncState='delete_pending';await dbPut(SESSION_STORE,s);if(navigator.onLine)await syncSessions()}else await dbDelete(SESSION_STORE,s.id);await renderHistory()}
+async function clearVisibleSessions(){for(const s of visibleSessions(await dbAll())){if(s.ownerId&&s.syncState!=='local'){s.syncState='delete_pending';await dbPut(SESSION_STORE,s)}else await dbDelete(SESSION_STORE,s.id)}if(navigator.onLine)await syncSessions();await renderHistory()}
+async function renderHistory(){const list=visibleSessions(await dbAll());const el=$('historyList');if(!list.length){el.innerHTML='<div class="empty">No hay sesiones guardadas.</div>';return}el.innerHTML=list.map(s=>`<div class="session-row" data-id="${sessionDomId(s)}"><div><b>${new Date(s.start).toLocaleString()}</b><br><small>${fmtTime(s.duration)} · ${s.distanceKm==null?'—':fmt(s.distanceKm,2)+' km'} · ${s.calories??'—'} kcal</small></div><div class="row-actions"><div style="text-align:right"><b>${fmt(s.avgPower)} W</b><br><small>prom.</small></div><button class="smallbtn danger deleteOne" data-id="${sessionDomId(s)}">×</button></div></div>`).join('');el.querySelectorAll('.session-row').forEach(r=>r.onclick=e=>{if(e.target.closest('.deleteOne'))return;openDetail(r.dataset.id)});el.querySelectorAll('.deleteOne').forEach(b=>b.onclick=async e=>{e.stopPropagation();if(confirm('¿Borrar esta sesión?')){const s=list.find(x=>sessionDomId(x)===b.dataset.id);if(s)await deleteSession(s)}})}
 
-async function openDetail(id){const list=await dbAll();detailSession=list.find(x=>x.id===id);if(!detailSession)return;ftpW=Number(localStorage.getItem(FTP_KEY)||200);$('liveScreen').classList.add('hidden');$('historyNav').classList.add('hidden');$('historyScreen').classList.add('hidden');$('detailScreen').classList.remove('hidden');$('detailTitle').textContent=new Date(detailSession.start).toLocaleString();renderDetail()}
+async function openDetail(id){const list=visibleSessions(await dbAll());detailSession=list.find(x=>sessionDomId(x)===id);if(!detailSession)return;ftpW=Number(localStorage.getItem(FTP_KEY)||200);$('liveScreen').classList.add('hidden');$('historyNav').classList.add('hidden');$('historyScreen').classList.add('hidden');$('detailScreen').classList.remove('hidden');$('detailTitle').textContent=new Date(detailSession.start).toLocaleString();renderDetail()}
 function renderDetail(){const s=detailSession,st=calcStats(s.samples),zones=zoneData(s.samples),splits=splitData(s.samples),total=Math.max(1,s.samples.length);$('detailContent').innerHTML=`<div class="card"><div class="summarygrid"><div class="summaryitem"><div class="v">${fmtTime(s.duration)}</div><div class="l">Duración</div></div><div class="summaryitem"><div class="v">${fmt(s.distanceKm,2)} km</div><div class="l">Distancia</div></div><div class="summaryitem"><div class="v">${s.calories??'—'}</div><div class="l">kcal</div></div><div class="summaryitem"><div class="v">${fmt(st.avgPower)} / ${fmt(st.maxPower)} W</div><div class="l">Potencia prom. / máx.</div></div><div class="summaryitem"><div class="v">${fmt(st.avgSpeed,1)} km/h</div><div class="l">Velocidad promedio</div></div><div class="summaryitem"><div class="v">${fmt(st.avgCadence,1)} rpm</div><div class="l">Cadencia promedio</div></div><div class="summaryitem"><div class="v">${fmt(st.maxSpeed,1)} km/h</div><div class="l">Velocidad máxima</div></div><div class="summaryitem"><div class="v">${fmt(st.maxCadence,1)} rpm</div><div class="l">Cadencia máxima</div></div></div></div>
 <div class="card detail-chart"><div class="chart-title">Potencia <span>${fmt(st.avgPower)} W promedio</span></div><canvas id="dp"></canvas><div class="chart-hint">Toca o desliza sobre el gráfico para ver el valor de ese momento.</div></div>
 <div class="card detail-chart"><div class="chart-title">Cadencia</div><canvas id="dc"></canvas></div>
@@ -150,7 +216,7 @@ function renderDetail(){const s=detailSession,st=calcStats(s.samples),zones=zone
 <div class="card zones"><div class="chart-title">Zonas de potencia <span>FTP <span id="ftpLabel">${ftpW}</span> W</span></div><div class="settings" style="margin:10px 0"><span>FTP para calcular zonas</span><input id="ftpInput" type="number" min="1" step="1" value="${ftpW}"></div><table><thead><tr><th>Zona</th><th>Tiempo</th><th>%</th></tr></thead><tbody>${zones.map(z=>`<tr><td>${z.name}</td><td>${fmtTime(z.sec)}</td><td>${fmt(z.sec/total*100,0)}%</td></tr>`).join('')}</tbody></table></div>
 <div class="card splits"><div class="chart-title">Parciales</div><table><thead><tr><th>Parcial</th><th>Tiempo</th><th>W prom.</th><th>km/h</th><th>rpm</th></tr></thead><tbody>${splits.map((q,i)=>`<tr><td>${hasDistance(s.samples)?(i+1)+' km':fmt(q.from,1)+'–'+fmt(q.to,1)+' min'}</td><td>${fmtTime(q.duration)}</td><td>${fmt(q.avgPower)}</td><td>${fmt(q.avgSpeed,1)}</td><td>${fmt(q.avgCadence,1)}</td></tr>`).join('')}</tbody></table></div>
 <div class="card"><div class="chart-title">Exportar / borrar</div><div class="export-row"><button class="primary" id="exportDetail">⬇ CSV</button><button class="danger" id="deleteDetail">Borrar sesión</button></div></div>`;
-  chartDetail($('dp'),s.samples,'power','W');chartDetail($('dc'),s.samples,'cadence','rpm');chartDetail($('ds'),s.samples,'speed','km/h');$('ftpInput').onchange=()=>{ftpW=clamp(Number($('ftpInput').value)||200,1,2000);localStorage.setItem(FTP_KEY,ftpW);renderDetail()};$('exportDetail').onclick=()=>exportCSV(s);$('deleteDetail').onclick=async()=>{if(confirm('¿Borrar esta sesión?')){await dbDelete(SESSION_STORE,s.id);backToHistory()}}}
+  chartDetail($('dp'),s.samples,'power','W');chartDetail($('dc'),s.samples,'cadence','rpm');chartDetail($('ds'),s.samples,'speed','km/h');$('ftpInput').onchange=()=>{ftpW=clamp(Number($('ftpInput').value)||200,1,2000);localStorage.setItem(FTP_KEY,ftpW);renderDetail()};$('exportDetail').onclick=()=>exportCSV(s);$('deleteDetail').onclick=async()=>{if(confirm('¿Borrar esta sesión?')){await deleteSession(s);backToHistory()}}}
 function hasDistance(samples){return samples.some(s=>Number.isFinite(s.distanceKm)&&s.distanceKm>0)}
 
 function csvEscape(v){const s=String(v??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
@@ -167,11 +233,12 @@ async function connect(reconnect=false){if(!navigator.bluetooth){alert('Este nav
 function onData(ev){const f=parseFTMS(ev.target.value.buffer);if(!f)return;mergeFields(f);addLivePower()}
 function onDisconnected(){$('dot').classList.remove('on');$('status').textContent='Desconectada — reconectando…';characteristic=null;stopSampling();clearTimeout(reconnectTimer);reconnectTimer=setTimeout(()=>{if(device?.gatt&&!device.gatt.connected)connect(true)},1200)}
 
-async function checkRecovery(){const a=await dbGet(ACTIVE_STORE,'active');if(!a)return;session=a;$('resumeBox').classList.remove('hidden');$('resumeText').textContent=`${fmtTime(a.elapsedSec)} · ${fmt(a.distanceKm,2)} km · ${a.samples.length} muestras guardadas. Puedes continuar cuando vuelvas a conectar la bici.`;$('finish').disabled=false;updateUI()}
+async function checkRecovery(){let a=await dbGet(ACTIVE_STORE,'active');while(a&&typeof a.sessionId==='string'){const removed=await dbDeleteFinalizedActive(a.sessionId);if(removed)return;const latest=await dbGet(ACTIVE_STORE,'active');if(!latest)return;if(latest.sessionId===a.sessionId){a=latest;break}a=latest}if(!a)return;session={...a,id:typeof a.sessionId==='string'?a.sessionId:sessionId()};$('resumeBox').classList.remove('hidden');$('resumeText').textContent=`${fmtTime(a.elapsedSec)} · ${fmt(a.distanceKm,2)} km · ${a.samples.length} muestras guardadas. Puedes continuar cuando vuelvas a conectar la bici.`;$('finish').disabled=false;updateUI()}
 
-$('connect').onclick=()=>connect(false);$('finish').onclick=()=>finishSession();$('wakeBtn').onclick=requestWakeLock;$('openHistory').onclick=showHistory;$('backFromHistory').onclick=backToLive;$('backFromDetail').onclick=backToHistory;$('resumeBtn').onclick=async()=>{if(!session)return;$('resumeBox').classList.add('hidden');await connect(false)};$('discardActive').onclick=async()=>{if(confirm('¿Descartar la sesión recuperada?')){await dbDelete(ACTIVE_STORE,'active');session=null;$('resumeBox').classList.add('hidden');$('finish').disabled=true;updateUI()}};$('clearHistory').onclick=async()=>{if(confirm('¿Borrar todo el historial?')){await dbClear();renderHistory()}};
+$('connect').onclick=()=>connect(false);$('finish').onclick=()=>finishSession();$('wakeBtn').onclick=requestWakeLock;$('openHistory').onclick=showHistory;$('backFromHistory').onclick=backToLive;$('backFromDetail').onclick=backToHistory;$('resumeBtn').onclick=async()=>{if(!session)return;$('resumeBox').classList.add('hidden');await connect(false)};$('discardActive').onclick=async()=>{if(confirm('¿Descartar la sesión recuperada?')){await dbDelete(ACTIVE_STORE,'active');session=null;$('resumeBox').classList.add('hidden');$('finish').disabled=true;updateUI()}};$('clearHistory').onclick=async()=>{if(confirm('¿Borrar tu historial visible?'))await clearVisibleSessions()};$('signIn').onclick=sendSignInLink;$('signOut').onclick=async()=>{if(supabase)await supabase.auth.signOut()};
+window.addEventListener('online',()=>{setSyncStatus('Conexión disponible');syncSessions()});window.addEventListener('offline',()=>setSyncStatus('Sin conexión · guardado local'));document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncSessions()});
 setInterval(()=>{if(session){$('elapsed').textContent=fmtTime(session.elapsedSec);$('avgPower').textContent=fmt(calcStats(session.samples).avgPower)}},1000);
-(async()=>{try{await openDB();await checkRecovery()}catch(e){console.error('IndexedDB',e)}drawLiveChart()})();
+(async()=>{try{await openDB();await checkRecovery();await initAuth()}catch(e){console.error('Inicialización',e);refreshAuthUI()}drawLiveChart();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(e=>console.error('Service worker',e))})();
 </script>
 </body>
 </html>
