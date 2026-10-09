@@ -351,6 +351,70 @@ class IndexedDBMigrationTest(unittest.TestCase):
         finally:
             context.close()
 
+    def test_user_can_explicitly_share_legacy_session_without_changing_local_key(self) -> None:
+        supabase_sdk = """
+          window.__remoteRows = [];
+          window.__upserts = [];
+          var supabase = {createClient: () => ({
+            auth: {
+              getSession: async () => ({data: {session: {user: {id: 'test-user'}}}}),
+              onAuthStateChange: () => ({data: {subscription: {unsubscribe() {}}}}),
+              signOut: async () => ({error: null})
+            },
+            from: () => ({
+              upsert: async row => {
+                window.__upserts.push(row);
+                window.__remoteRows = window.__remoteRows.filter(existing => existing.id !== row.id).concat(row);
+                return {error: null};
+              },
+              delete: () => ({eq: async () => ({error: null})}),
+              select: () => {
+                const query = {order() { return query; }, range: async () => ({data: window.__remoteRows, error: null})};
+                return query;
+              }
+            })
+          })};
+        """
+        old_session = {"id": 1710000000301, "start": 1710000000301, "duration": 3000,
+                       "samples": [{"t": 1, "power": 100}], "distanceKm": 25,
+                       "avgPower": 100}
+        context = self.browser.new_context(service_workers="block")
+        context.route(
+            "https://cdn.jsdelivr.net/**",
+            lambda route: route.fulfill(
+                status=200, content_type="application/javascript", body=supabase_sdk
+            ),
+        )
+        page = context.new_page()
+        try:
+            page.goto(f"{self.base_url}/sw.js", wait_until="domcontentloaded")
+            self.seed_database(page, 3, [old_session], [])
+            page.goto(f"{self.base_url}/index.html", wait_until="domcontentloaded")
+            page.wait_for_function("document.querySelector('#syncStatus')?.textContent === 'Sincronizado'")
+            self.assertEqual(page.evaluate("window.__upserts.length"), 0)
+
+            page.locator("#openHistory").click()
+            page.locator(".session-row").click()
+            page.locator("#shareSession").wait_for()
+            page.once("dialog", lambda dialog: dialog.accept())
+            page.locator("#shareSession").click()
+            page.wait_for_function(
+                "async () => { const row = (await dbAll())[0]; return row?.ownerId === 'test-user' && row.syncState === 'synced'; }"
+            )
+
+            result = self.read_stores(page)
+            self.assertEqual(len(result["sessions"]), 1)
+            shared = result["sessions"][0]
+            self.assertEqual(shared["id"], old_session["id"])
+            self.assertEqual(shared["ownerId"], "test-user")
+            self.assertEqual(shared["syncState"], "synced")
+            self.assertRegex(shared["cloudId"], r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+            self.assertEqual(page.evaluate("window.__upserts.length"), 1)
+            self.assertEqual(page.evaluate("window.__upserts[0].payload.id"), old_session["id"])
+            self.assertEqual(page.evaluate("window.__upserts[0].id"), shared["cloudId"])
+        finally:
+            context.close()
+
     def test_authenticated_user_sees_local_history_without_uploading_it(self) -> None:
         fake_client = """
           window.__syncCalls = [];

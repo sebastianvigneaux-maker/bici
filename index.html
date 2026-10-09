@@ -162,8 +162,53 @@ function visibleSessions(rows){return rows.filter(s=>s.syncState!=='delete_pendi
 function sessionDomId(s){return `${typeof s.id}:${String(s.id)}`}
 function setSyncStatus(message){$('syncStatus').textContent=message}
 function setAuthMessage(message){$('authMessage').textContent=message}
-function sessionToRow(s){return{id:s.id,user_id:s.ownerId,started_at:new Date(s.start).toISOString(),updated_at:new Date().toISOString(),payload:s}}
-async function syncSessions(){if(!supabaseClient||!authUser||!navigator.onLine)return;if(syncRunning){syncAgain=true;return}syncRunning=true;setSyncStatus('Sincronizando…');try{const uid=authUser.id,local=await dbAll();for(const s of local){if(s.ownerId!==uid)continue;if(s.syncState==='delete_pending'){const{error}=await supabaseClient.from('training_sessions').delete().eq('id',s.id);if(error)throw error;await dbDelete(SESSION_STORE,s.id);continue}if(s.syncState==='pending'){const{error}=await supabaseClient.from('training_sessions').upsert(sessionToRow(s),{onConflict:'id'});if(error)throw error;s.syncState='synced';await dbPut(SESSION_STORE,s)}}const remote=[];for(let offset=0;;offset+=500){const{data,error}=await supabaseClient.from('training_sessions').select('id,user_id,started_at,payload').order('started_at',{ascending:false}).range(offset,offset+499);if(error)throw error;remote.push(...(data||[]));if(!data||data.length<500)break}const remoteIds=new Set(remote.map(row=>row.id));for(const row of remote){if(row.user_id!==uid)continue;const existing=await dbGet(SESSION_STORE,row.id);if(!existing)await dbPut(SESSION_STORE,{...row.payload,id:row.id,ownerId:uid,syncState:'synced'})}for(const s of local)if(s.ownerId===uid&&s.syncState==='synced'&&!remoteIds.has(s.id))await dbDelete(SESSION_STORE,s.id);setSyncStatus('Sincronizado');await renderHistoryIfOpen()}catch(e){console.error('Supabase sync',e);setSyncStatus(navigator.onLine?'Pendiente de sincronizar':'Sin conexión')}finally{syncRunning=false;if(syncAgain){syncAgain=false;setTimeout(syncSessions,0)}}}
+function cloudSessionId(s){if(typeof s.cloudId==='string')return s.cloudId;if(typeof s.id==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s.id))return s.id;s.cloudId=sessionId();return s.cloudId}
+function sessionToRow(s){return{id:cloudSessionId(s),user_id:s.ownerId,started_at:new Date(s.start).toISOString(),updated_at:new Date().toISOString(),payload:s}}
+async function syncSessions(){
+  if(!supabaseClient||!authUser||!navigator.onLine)return;
+  if(syncRunning){syncAgain=true;return}
+  syncRunning=true;setSyncStatus('Sincronizando?');
+  try{
+    const uid=authUser.id,local=await dbAll();
+    for(const s of local){
+      if(s.ownerId!==uid)continue;
+      const cloudId=cloudSessionId(s);
+      if(s.syncState==='delete_pending'){
+        const{error}=await supabaseClient.from('training_sessions').delete().eq('id',cloudId);
+        if(error)throw error;
+        await dbDelete(SESSION_STORE,s.id);continue;
+      }
+      if(s.syncState==='pending'){
+        const{error}=await supabaseClient.from('training_sessions').upsert(sessionToRow(s),{onConflict:'id'});
+        if(error)throw error;
+        s.syncState='synced';await dbPut(SESSION_STORE,s);
+      }
+    }
+    const remote=[];
+    for(let offset=0;;offset+=500){
+      const{data,error}=await supabaseClient.from('training_sessions').select('id,user_id,started_at,payload').order('started_at',{ascending:false}).range(offset,offset+499);
+      if(error)throw error;remote.push(...(data||[]));if(!data||data.length<500)break;
+    }
+    const remoteIds=new Set(remote.map(row=>row.id));
+    for(const row of remote){
+      if(row.user_id!==uid)continue;
+      const existing=local.find(s=>s.ownerId===uid&&(s.cloudId||s.id)===row.id)||await dbGet(SESSION_STORE,row.id);
+      if(!existing){const downloaded={...row.payload,id:row.id,ownerId:uid,syncState:'synced'};await dbPut(SESSION_STORE,downloaded);local.push(downloaded)}
+    }
+    for(const s of local)if(s.ownerId===uid&&s.syncState==='synced'&&!remoteIds.has(s.cloudId||s.id))await dbDelete(SESSION_STORE,s.id);
+    setSyncStatus('Sincronizado');await renderHistoryIfOpen();
+  }catch(e){console.error('Supabase sync',e);setSyncStatus(navigator.onLine?'Pendiente de sincronizar':'Sin conexi?n')}
+  finally{syncRunning=false;if(syncAgain){syncAgain=false;setTimeout(syncSessions,0)}}
+}
+async function shareLocalSession(s){
+  if(!supabaseClient||!authUser||!s||s.ownerId!=null)return;
+  if(!confirm('Esta sesi?n se subir? a tu cuenta y quedar? disponible en tus otros dispositivos. ?Compartirla?'))return;
+  s.ownerId=authUser.id;s.syncState='pending';cloudSessionId(s);
+  await dbPut(SESSION_STORE,s);detailSession=s;renderDetail();
+  if(navigator.onLine)await syncSessions();
+  detailSession=await dbGet(SESSION_STORE,s.id)||s;renderDetail();
+}
+
 async function renderHistoryIfOpen(){if(!$('historyScreen').classList.contains('hidden'))await renderHistory()}
 function refreshAuthUI(){const configured=!!supabaseClient;$('authEmail').disabled=!configured||!!authUser;$('signIn').disabled=!configured||!!authUser;$('signOut').classList.toggle('hidden',!authUser);if(!configured){setAuthMessage('Configura el URL y la clave publicable en supabase-config.js. Las sesiones siguen guardándose localmente.');return}if(authUser)setAuthMessage(`Conectado como ${authUser.email||'usuario'}. Las sesiones locales antiguas siguen en este dispositivo y no se sincronizan automáticamente.`);else setAuthMessage('Inicia sesión con el mismo correo en ambos dispositivos para sincronizar. El historial local permanece en este dispositivo.')}
 async function initAuth(){if(!supabaseClient){refreshAuthUI();return}const{data}=await supabaseClient.auth.getSession();authUser=data.session?.user||null;refreshAuthUI();if(authUser)await syncSessions();supabaseClient.auth.onAuthStateChange((_event,s)=>{authUser=s?.user||null;if(detailSession&&detailSession.ownerId!==authUser?.id)backToLive();refreshAuthUI();setTimeout(()=>{if(authUser)syncSessions();else renderHistoryIfOpen()},0)})}
@@ -209,14 +254,14 @@ async function clearVisibleSessions(){for(const s of visibleSessions(await dbAll
 async function renderHistory(){const list=visibleSessions(await dbAll());const el=$('historyList');if(!list.length){el.innerHTML='<div class="empty">No hay sesiones guardadas.</div>';return}el.innerHTML=list.map(s=>`<div class="session-row" data-id="${sessionDomId(s)}"><div><b>${new Date(s.start).toLocaleString()}</b><br><small>${fmtTime(s.duration)} · ${s.distanceKm==null?'—':fmt(s.distanceKm,2)+' km'} · ${s.calories??'—'} kcal</small></div><div class="row-actions"><div style="text-align:right"><b>${fmt(s.avgPower)} W</b><br><small>prom.</small></div><button class="smallbtn danger deleteOne" data-id="${sessionDomId(s)}">×</button></div></div>`).join('');el.querySelectorAll('.session-row').forEach(r=>r.onclick=e=>{if(e.target.closest('.deleteOne'))return;openDetail(r.dataset.id)});el.querySelectorAll('.deleteOne').forEach(b=>b.onclick=async e=>{e.stopPropagation();if(confirm('¿Borrar esta sesión?')){const s=list.find(x=>sessionDomId(x)===b.dataset.id);if(s)await deleteSession(s)}})}
 
 async function openDetail(id){const list=visibleSessions(await dbAll());detailSession=list.find(x=>sessionDomId(x)===id);if(!detailSession)return;ftpW=Number(localStorage.getItem(FTP_KEY)||200);$('liveScreen').classList.add('hidden');$('historyNav').classList.add('hidden');$('historyScreen').classList.add('hidden');$('detailScreen').classList.remove('hidden');$('detailTitle').textContent=new Date(detailSession.start).toLocaleString();renderDetail()}
-function renderDetail(){const s=detailSession,st=calcStats(s.samples),zones=zoneData(s.samples),splits=splitData(s.samples),total=Math.max(1,s.samples.length);$('detailContent').innerHTML=`<div class="card"><div class="summarygrid"><div class="summaryitem"><div class="v">${fmtTime(s.duration)}</div><div class="l">Duración</div></div><div class="summaryitem"><div class="v">${fmt(s.distanceKm,2)} km</div><div class="l">Distancia</div></div><div class="summaryitem"><div class="v">${s.calories??'—'}</div><div class="l">kcal</div></div><div class="summaryitem"><div class="v">${fmt(st.avgPower)} / ${fmt(st.maxPower)} W</div><div class="l">Potencia prom. / máx.</div></div><div class="summaryitem"><div class="v">${fmt(st.avgSpeed,1)} km/h</div><div class="l">Velocidad promedio</div></div><div class="summaryitem"><div class="v">${fmt(st.avgCadence,1)} rpm</div><div class="l">Cadencia promedio</div></div><div class="summaryitem"><div class="v">${fmt(st.maxSpeed,1)} km/h</div><div class="l">Velocidad máxima</div></div><div class="summaryitem"><div class="v">${fmt(st.maxCadence,1)} rpm</div><div class="l">Cadencia máxima</div></div></div></div>
+function renderDetail(){const s=detailSession,st=calcStats(s.samples),zones=zoneData(s.samples),splits=splitData(s.samples),total=Math.max(1,s.samples.length),sharePanel=authUser&&s.ownerId==null?`<div class="card"><div class="chart-title">Compartir sesion</div><p class="notice">Esta sesion solo esta guardada en este dispositivo. Si la compartes, se guardara en tu cuenta para verla en tus otros dispositivos.</p><button class="blue" id="shareSession">Compartir con mis dispositivos</button></div>`:authUser&&s.ownerId===authUser.id?`<div class="notice">${s.syncState==='synced'?'Sesion compartida con tus dispositivos.':'Sesion pendiente de sincronizar.'}</div>`:'';$('detailContent').innerHTML=`<div class="card"><div class="summarygrid"><div class="summaryitem"><div class="v">${fmtTime(s.duration)}</div><div class="l">Duración</div></div><div class="summaryitem"><div class="v">${fmt(s.distanceKm,2)} km</div><div class="l">Distancia</div></div><div class="summaryitem"><div class="v">${s.calories??'—'}</div><div class="l">kcal</div></div><div class="summaryitem"><div class="v">${fmt(st.avgPower)} / ${fmt(st.maxPower)} W</div><div class="l">Potencia prom. / máx.</div></div><div class="summaryitem"><div class="v">${fmt(st.avgSpeed,1)} km/h</div><div class="l">Velocidad promedio</div></div><div class="summaryitem"><div class="v">${fmt(st.avgCadence,1)} rpm</div><div class="l">Cadencia promedio</div></div><div class="summaryitem"><div class="v">${fmt(st.maxSpeed,1)} km/h</div><div class="l">Velocidad máxima</div></div><div class="summaryitem"><div class="v">${fmt(st.maxCadence,1)} rpm</div><div class="l">Cadencia máxima</div></div></div></div>
 <div class="card detail-chart"><div class="chart-title">Potencia <span>${fmt(st.avgPower)} W promedio</span></div><canvas id="dp"></canvas><div class="chart-hint">Toca o desliza sobre el gráfico para ver el valor de ese momento.</div></div>
 <div class="card detail-chart"><div class="chart-title">Cadencia</div><canvas id="dc"></canvas></div>
 <div class="card detail-chart"><div class="chart-title">Velocidad</div><canvas id="ds"></canvas></div>
 <div class="card zones"><div class="chart-title">Zonas de potencia <span>FTP <span id="ftpLabel">${ftpW}</span> W</span></div><div class="settings" style="margin:10px 0"><span>FTP para calcular zonas</span><input id="ftpInput" type="number" min="1" step="1" value="${ftpW}"></div><table><thead><tr><th>Zona</th><th>Tiempo</th><th>%</th></tr></thead><tbody>${zones.map(z=>`<tr><td>${z.name}</td><td>${fmtTime(z.sec)}</td><td>${fmt(z.sec/total*100,0)}%</td></tr>`).join('')}</tbody></table></div>
 <div class="card splits"><div class="chart-title">Parciales</div><table><thead><tr><th>Parcial</th><th>Tiempo</th><th>W prom.</th><th>km/h</th><th>rpm</th></tr></thead><tbody>${splits.map((q,i)=>`<tr><td>${hasDistance(s.samples)?(i+1)+' km':fmt(q.from,1)+'–'+fmt(q.to,1)+' min'}</td><td>${fmtTime(q.duration)}</td><td>${fmt(q.avgPower)}</td><td>${fmt(q.avgSpeed,1)}</td><td>${fmt(q.avgCadence,1)}</td></tr>`).join('')}</tbody></table></div>
-<div class="card"><div class="chart-title">Exportar / borrar</div><div class="export-row"><button class="primary" id="exportDetail">⬇ CSV</button><button class="danger" id="deleteDetail">Borrar sesión</button></div></div>`;
-  chartDetail($('dp'),s.samples,'power','W');chartDetail($('dc'),s.samples,'cadence','rpm');chartDetail($('ds'),s.samples,'speed','km/h');$('ftpInput').onchange=()=>{ftpW=clamp(Number($('ftpInput').value)||200,1,2000);localStorage.setItem(FTP_KEY,ftpW);renderDetail()};$('exportDetail').onclick=()=>exportCSV(s);$('deleteDetail').onclick=async()=>{if(confirm('¿Borrar esta sesión?')){await deleteSession(s);backToHistory()}}}
+<div class="card"><div class="chart-title">Exportar / borrar</div><div class="export-row"><button class="primary" id="exportDetail">⬇ CSV</button><button class="danger" id="deleteDetail">Borrar sesión</button></div></div>${sharePanel}`;
+  chartDetail($('dp'),s.samples,'power','W');chartDetail($('dc'),s.samples,'cadence','rpm');chartDetail($('ds'),s.samples,'speed','km/h');$('ftpInput').onchange=()=>{ftpW=clamp(Number($('ftpInput').value)||200,1,2000);localStorage.setItem(FTP_KEY,ftpW);renderDetail()};$('exportDetail').onclick=()=>exportCSV(s);if($('shareSession'))$('shareSession').onclick=()=>shareLocalSession(s);$('deleteDetail').onclick=async()=>{if(confirm('¿Borrar esta sesión?')){await deleteSession(s);backToHistory()}}}
 function hasDistance(samples){return samples.some(s=>Number.isFinite(s.distanceKm)&&s.distanceKm>0)}
 
 function csvEscape(v){const s=String(v??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
