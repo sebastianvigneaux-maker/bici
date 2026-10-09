@@ -318,6 +318,39 @@ class IndexedDBMigrationTest(unittest.TestCase):
         finally:
             context.close()
 
+    def test_supabase_global_does_not_conflict_and_signin_handler_runs(self) -> None:
+        supabase_sdk = """
+          var supabase = {createClient: () => ({auth: {
+            getSession: async () => ({data: {session: null}}),
+            onAuthStateChange: () => ({data: {subscription: {unsubscribe() {}}}}),
+            signInWithOtp: async ({email}) => {window.__sentEmail = email; return {error: null};},
+            signOut: async () => ({error: null})
+          }})};
+        """
+        context = self.browser.new_context(service_workers="block")
+        context.route(
+            "https://cdn.jsdelivr.net/**",
+            lambda route: route.fulfill(
+                status=200, content_type="application/javascript", body=supabase_sdk
+            ),
+        )
+        page = context.new_page()
+        page_errors = []
+        page.on("pageerror", lambda error: page_errors.append(str(error)))
+        try:
+            page.goto(f"{self.base_url}/index.html", wait_until="domcontentloaded")
+            page.wait_for_function(
+                "document.querySelector('#authMessage')?.textContent.startsWith('Inicia sesión')"
+            )
+            self.assertFalse(page.locator("#signIn").is_disabled())
+            page.locator("#authEmail").fill("rider@example.invalid")
+            page.locator("#signIn").click()
+            page.wait_for_function("window.__sentEmail === 'rider@example.invalid'")
+            self.assertIn("Revisa tu correo", page.locator("#authMessage").inner_text())
+            self.assertEqual(page_errors, [])
+        finally:
+            context.close()
+
     def test_authenticated_user_sees_local_history_without_uploading_it(self) -> None:
         fake_client = """
           window.__syncCalls = [];
