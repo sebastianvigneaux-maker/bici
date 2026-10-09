@@ -415,6 +415,50 @@ class IndexedDBMigrationTest(unittest.TestCase):
         finally:
             context.close()
 
+    def test_training_starts_only_when_connected_and_recovers_until_finish(self) -> None:
+        context = self.browser.new_context(service_workers="block")
+        context.route("https://cdn.jsdelivr.net/**", lambda route: route.abort())
+        page = context.new_page()
+        try:
+            page.goto(f"{self.base_url}/index.html", wait_until="domcontentloaded")
+            page.wait_for_function("document.querySelector('#authMessage')?.textContent.startsWith('Configura')")
+            start_button = page.locator("#startSession")
+            self.assertFalse(start_button.is_visible())
+            self.assertTrue(start_button.is_disabled())
+            self.assertTrue(page.locator("#finish").is_disabled())
+
+            page.evaluate("device = {name: 'Mock FTMS', gatt: {connected: true}}; characteristic = {}; updateTrainingControls()")
+            self.assertTrue(start_button.is_visible())
+            self.assertFalse(start_button.is_disabled())
+            start_button.click()
+            page.wait_for_function("session !== null && !document.querySelector('#finish').disabled")
+            page.evaluate("""async () => {
+              session.elapsedSec = 12;
+              session.samples.push({t: 12, power: 100, speed: 20, cadence: 80});
+              stopSampling();
+              await persistActive();
+            }""")
+
+            page.reload(wait_until="domcontentloaded")
+            page.wait_for_function("document.querySelector('#resumeBox') && !document.querySelector('#resumeBox').classList.contains('hidden')")
+            self.assertTrue(page.locator("#finish").is_enabled())
+            self.assertFalse(page.locator("#startSession").is_visible())
+            self.assertEqual(page.locator("#discardActive").count(), 0)
+            recovered = self.read_stores(page)
+            self.assertEqual(len(recovered["active"]), 1)
+            self.assertEqual(recovered["active"][0]["elapsedSec"], 12)
+            self.assertEqual(recovered["active"][0]["samples"][0]["power"], 100)
+
+            page.locator("#finish").click()
+            page.wait_for_function("async () => (await dbAll()).length === 1")
+            finished = self.read_stores(page)
+            self.assertEqual(len(finished["sessions"]), 1)
+            self.assertEqual(finished["sessions"][0]["elapsedSec"], 12)
+            self.assertEqual(finished["sessions"][0]["samples"][0]["power"], 100)
+            self.assertEqual(finished["active"], [])
+        finally:
+            context.close()
+
     def test_authenticated_user_sees_local_history_without_uploading_it(self) -> None:
         fake_client = """
           window.__syncCalls = [];
