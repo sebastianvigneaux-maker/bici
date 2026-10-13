@@ -371,6 +371,26 @@ class IndexedDBMigrationTest(unittest.TestCase):
             }""")
             self.assertEqual([label for label in labels if label.isdigit()],
                              ["100", "75", "50", "25", "0"])
+
+            selected = page.evaluate("""() => {
+              const original = CanvasRenderingContext2D.prototype.setLineDash;
+              const dashCalls = [];
+              CanvasRenderingContext2D.prototype.setLineDash = function(value) {
+                dashCalls.push(Array.from(value));
+                return original.call(this, value);
+              };
+              const canvas = document.createElement('canvas');
+              Object.defineProperty(canvas, 'getBoundingClientRect', {
+                value: () => ({width: 320, height: 160, left: 10, top: 20})
+              });
+              showChartValue({clientX: 260, clientY: 60}, canvas,
+                [{t: 0, power: 0}, {t: 4, power: 100}], 'power', 'W');
+              CanvasRenderingContext2D.prototype.setLineDash = original;
+              return {dashCalls, tooltip: document.querySelector('#tooltip').textContent};
+            }""")
+            self.assertIn([4, 3], selected["dashCalls"])
+            self.assertIn("00:04", selected["tooltip"])
+            self.assertIn("100 W", selected["tooltip"])
         finally:
             context.close()
 

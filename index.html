@@ -238,7 +238,7 @@ async function startNewSession(){if(!device?.gatt?.connected||!characteristic||s
 async function continueRecovered(s){session=s;lastFields={};$('resumeBox').classList.add('hidden');$('finish').disabled=false;updateUI();if(device?.gatt?.connected)startSampling()}
 async function finishSession(){if(!session)return;stopSampling();const stats=calcStats(session.samples);const final={...session,ownerId:session.ownerId||authUser?.id||null,syncState:(session.ownerId||authUser)?'pending':'local',end:Date.now(),duration:session.elapsedSec,avgPower:stats.avgPower,maxPower:stats.maxPower,avgSpeed:stats.avgSpeed,maxSpeed:stats.maxSpeed,avgCadence:stats.avgCadence,maxCadence:stats.maxCadence,calories:lastFields.calories??session.samples.at(-1)?.calories??null};await dbPut(SESSION_STORE,final);await dbDelete(ACTIVE_STORE,'active');session=null;$('finish').disabled=true;updateUI();updateTrainingControls();await renderHistory();if(navigator.onLine)syncSessions()}
 
-function drawCanvas(canvas, samples,key,unit,label){
+function drawCanvas(canvas, samples,key,unit,label,selected=null){
   const dpr=devicePixelRatio||1,r=canvas.getBoundingClientRect(),w=r.width,h=r.height,plotLeft=44,plotTop=18,plotBottom=h-14;
   canvas.width=Math.max(1,w*dpr);canvas.height=Math.max(1,h*dpr);
   const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
@@ -252,7 +252,12 @@ function drawCanvas(canvas, samples,key,unit,label){
   if(!pts.length)return;
   ctx.strokeStyle='#65d68a';ctx.lineWidth=2;ctx.beginPath();
   pts.forEach((s,i)=>{const x=plotLeft+(s.t/Math.max(1,samples.at(-1).t))*(w-plotLeft),y=plotBottom-((s[key]-min)/range)*(plotBottom-plotTop);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
-  ctx.stroke();ctx.textAlign='left';ctx.fillText(label,plotLeft,h-3);
+  ctx.stroke();
+  if(selected&&Number.isFinite(selected[key])){
+    const selectedX=plotLeft+(selected.t/Math.max(1,samples.at(-1).t))*(w-plotLeft),selectedY=plotBottom-((selected[key]-min)/range)*(plotBottom-plotTop);
+    ctx.save();ctx.strokeStyle='#f3c969';ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(selectedX,plotTop);ctx.lineTo(selectedX,plotBottom);ctx.moveTo(plotLeft,selectedY);ctx.lineTo(w,selectedY);ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.arc(selectedX,selectedY,3.5,0,Math.PI*2);ctx.fillStyle='#f3c969';ctx.fill();ctx.restore();
+  }
+  ctx.textAlign='left';ctx.fillText(label,plotLeft,h-3);
 }
 function drawLiveChart(){const now=Date.now();powerSamples=powerSamples.filter(x=>now-x.t<=600000);const c=$('liveChart');const samples=powerSamples.length?powerSamples.map(x=>({t:Math.max(0,600000-(now-x.t))/1000,power:x.p})):[];drawCanvas(c,samples,'power','W','10 min')}
 function addLivePower(){if(Number.isFinite(lastFields.power)){powerSamples.push({t:Date.now(),p:lastFields.power});powerSamples=powerSamples.slice(-700);drawLiveChart()}}
@@ -261,8 +266,8 @@ function zoneData(samples){const zones=[['Z1 recuperación',0,.55],['Z2 aeróbic
 function splitData(samples){if(!samples.length)return[];const hasDist=samples.some(s=>Number.isFinite(s.distanceKm)&&s.distanceKm>0);const out=[];if(hasDist){let next=1,start=0;for(let i=0;i<samples.length;i++){if(samples[i].distanceKm>=next){out.push(splitStats(samples.slice(start,i+1),next-1,next));start=i+1;next=Math.floor(samples[i].distanceKm)+1}}if(start<samples.length)out.push(splitStats(samples.slice(start),next-1,null));}else{for(let start=0;start<samples.length;start+=300)out.push(splitStats(samples.slice(start,start+300),samples[start].t/60,Math.min(samples.at(-1).t,(samples[start+299]||samples.at(-1)).t)/60))}return out}
 function splitStats(a,from,to){const st=calcStats(a);return {label:to==null?(from+'+'):to===Math.ceil(from)?`Km ${Math.max(1,Math.ceil(from))}`:`Km ${Math.max(1,Math.floor(from)+1)}`,duration:a.length,from,to,avgPower:st.avgPower,avgSpeed:st.avgSpeed,avgCadence:st.avgCadence,distance:a.at(-1)?.distanceKm??null}}
 
-function chartDetail(canvas,samples,key,unit){drawCanvas(canvas,samples,key,unit,'');canvas.addEventListener('pointerdown',e=>showChartValue(e,canvas,samples,key,unit));canvas.addEventListener('pointermove',e=>{if(e.buttons)showChartValue(e,canvas,samples,key,unit)});canvas.addEventListener('pointerleave',()=>{$('tooltip').classList.add('hidden')})}
-function showChartValue(e,canvas,samples,key,unit){const r=canvas.getBoundingClientRect(),plotLeft=44,ratio=clamp((e.clientX-r.left-plotLeft)/(r.width-plotLeft),0,1),t=ratio*(samples.at(-1)?.t||0);let best=samples[0];for(const s of samples){if(Math.abs(s.t-t)<Math.abs(best.t-t))best=s}if(!best)return;const tip=$('tooltip');tip.innerHTML=`<b>${fmtTime(best.t)}</b> · ${fmt(best[key],key==='cadence'||key==='speed'?1:0)} ${unit}`;tip.style.left=Math.min(window.innerWidth-150,Math.max(8,e.clientX+8))+'px';tip.style.top=Math.max(8,e.clientY-45)+'px';tip.classList.remove('hidden')}
+function chartDetail(canvas,samples,key,unit){drawCanvas(canvas,samples,key,unit,'');canvas.addEventListener('pointerdown',e=>showChartValue(e,canvas,samples,key,unit));canvas.addEventListener('pointermove',e=>{if(e.buttons)showChartValue(e,canvas,samples,key,unit)});canvas.addEventListener('pointerleave',()=>{$('tooltip').classList.add('hidden');drawCanvas(canvas,samples,key,unit,'')})}
+function showChartValue(e,canvas,samples,key,unit){const r=canvas.getBoundingClientRect(),plotLeft=44,ratio=clamp((e.clientX-r.left-plotLeft)/(r.width-plotLeft),0,1),t=ratio*(samples.at(-1)?.t||0);let best=samples[0];for(const s of samples){if(Math.abs(s.t-t)<Math.abs(best.t-t))best=s}if(!best)return;drawCanvas(canvas,samples,key,unit,'',best);const tip=$('tooltip');tip.innerHTML=`<b>${fmtTime(best.t)}</b> · ${fmt(best[key],key==='cadence'||key==='speed'?1:0)} ${unit}`;tip.style.left=Math.min(window.innerWidth-150,Math.max(8,e.clientX+8))+'px';tip.style.top=Math.max(8,e.clientY-45)+'px';tip.classList.remove('hidden')}
 
 async function deleteSession(s){if(s.ownerId&&s.syncState!=='local'){s.syncState='delete_pending';await dbPut(SESSION_STORE,s);if(navigator.onLine)await syncSessions()}else await dbDelete(SESSION_STORE,s.id);await renderHistory()}
 async function clearVisibleSessions(){for(const s of visibleSessions(await dbAll())){if(s.ownerId&&s.syncState!=='local'){s.syncState='delete_pending';await dbPut(SESSION_STORE,s)}else await dbDelete(SESSION_STORE,s.id)}if(navigator.onLine)await syncSessions();await renderHistory()}
