@@ -351,6 +351,29 @@ class IndexedDBMigrationTest(unittest.TestCase):
         finally:
             context.close()
 
+    def test_chart_draws_a_value_for_each_horizontal_grid_line(self) -> None:
+        context = self.browser.new_context(service_workers="block")
+        context.route("https://cdn.jsdelivr.net/**", lambda route: route.abort())
+        page = context.new_page()
+        try:
+            page.goto(f"{self.base_url}/index.html", wait_until="domcontentloaded")
+            labels = page.evaluate("""() => {
+              const original = CanvasRenderingContext2D.prototype.fillText;
+              const labels = [];
+              CanvasRenderingContext2D.prototype.fillText = function(text, ...args) {
+                labels.push(String(text));
+                return original.call(this, text, ...args);
+              };
+              const canvas = document.createElement('canvas');
+              drawCanvas(canvas, [{t: 0, power: 0}, {t: 4, power: 100}], 'power', 'W', '');
+              CanvasRenderingContext2D.prototype.fillText = original;
+              return labels;
+            }""")
+            self.assertEqual([label for label in labels if label.isdigit()],
+                             ["100", "75", "50", "25", "0"])
+        finally:
+            context.close()
+
     def test_user_can_explicitly_share_legacy_session_without_changing_local_key(self) -> None:
         supabase_sdk = """
           window.__remoteRows = [];
