@@ -35,7 +35,9 @@ button{border:0;border-radius:12px;background:#252b32;color:var(--text);padding:
 <div class="card small"><div class="label">Calorías</div><div class="value" id="calories">—</div><div class="unit">kcal</div></div>
 <div class="card small"><div class="label">Potencia promedio</div><div class="value" id="avgPower">—</div><div class="unit">W</div></div>
 </section>
-<section class="card chart-card"><div class="chart-title">Potencia <span>últimos 10 minutos</span></div><canvas id="liveChart"></canvas></section>
+<section class="card chart-card"><div class="chart-title">Potencia <span>últimos 10 minutos</span></div><canvas id="livePowerChart"></canvas></section>
+<section class="card chart-card"><div class="chart-title">Cadencia <span>últimos 10 minutos</span></div><canvas id="liveCadenceChart"></canvas></section>
+<section class="card chart-card"><div class="chart-title">Velocidad <span>últimos 10 minutos</span></div><canvas id="liveSpeedChart"></canvas></section>
 <div class="notice">La app conserva los campos de notificaciones FTMS alternadas y registra una muestra por segundo. Si FTMS no entrega distancia, se integra desde la velocidad.</div>
 <details><summary>Bytes crudos del último paquete</summary><div id="raw" class="raw">—</div></details>
 </section>
@@ -72,7 +74,7 @@ const FTP_KEY='ftms-bike-ftp';
 const SUPABASE_URL=window.FTMS_SUPABASE_URL||'', SUPABASE_KEY=window.FTMS_SUPABASE_PUBLISHABLE_KEY||'';
 const supabaseClient=SUPABASE_URL&&SUPABASE_KEY&&window.supabase?window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY):null;
 let device=null, characteristic=null, wakeLock=null, reconnectTimer=null;
-let session=null, lastFields={}, lastPacket=[], powerSamples=[];
+let session=null, lastFields={}, lastPacket=[];
 let sampleTimer=null, dbPromise=null, detailSession=null, authUser=null, syncRunning=false, syncAgain=false;
 let ftpW=Number(localStorage.getItem(FTP_KEY)||200);
 const $=id=>document.getElementById(id);
@@ -232,9 +234,9 @@ function makeSample(){
   session.samples.push(s);session.lastUpdated=Date.now();return s;
 }
 async function persistActive(){if(!session)return;await dbPut(ACTIVE_STORE,{...session,id:'active',sessionId:session.id})}
-function startSampling(){stopSampling();sampleTimer=setInterval(async()=>{if(!session||!characteristic||!device?.gatt?.connected)return;makeSample();updateUI();await persistActive();drawLiveChart()},1000)}
+function startSampling(){stopSampling();sampleTimer=setInterval(async()=>{if(!session||!characteristic||!device?.gatt?.connected)return;makeSample();updateUI();await persistActive();drawLiveCharts()},1000)}
 function stopSampling(){if(sampleTimer){clearInterval(sampleTimer);sampleTimer=null}}
-async function startNewSession(){if(!device?.gatt?.connected||!characteristic||session){updateTrainingControls();return}session={id:sessionId(),ownerId:authUser?.id||null,syncState:'local',start:Date.now(),device:device?.name||'FTMS Bike',elapsedSec:0,distanceKm:0,samples:[],lastUpdated:Date.now()};lastFields={};powerSamples=[];await persistActive();startSampling();requestWakeLock();updateUI();updateTrainingControls()}
+async function startNewSession(){if(!device?.gatt?.connected||!characteristic||session){updateTrainingControls();return}session={id:sessionId(),ownerId:authUser?.id||null,syncState:'local',start:Date.now(),device:device?.name||'FTMS Bike',elapsedSec:0,distanceKm:0,samples:[],lastUpdated:Date.now()};lastFields={};await persistActive();startSampling();requestWakeLock();updateUI();updateTrainingControls()}
 async function continueRecovered(s){session=s;lastFields={};$('resumeBox').classList.add('hidden');$('finish').disabled=false;updateUI();if(device?.gatt?.connected)startSampling()}
 async function finishSession(){if(!session)return;stopSampling();const stats=calcStats(session.samples);const final={...session,ownerId:session.ownerId||authUser?.id||null,syncState:(session.ownerId||authUser)?'pending':'local',end:Date.now(),duration:session.elapsedSec,avgPower:stats.avgPower,maxPower:stats.maxPower,avgSpeed:stats.avgSpeed,maxSpeed:stats.maxSpeed,avgCadence:stats.avgCadence,maxCadence:stats.maxCadence,calories:lastFields.calories??session.samples.at(-1)?.calories??null};await dbPut(SESSION_STORE,final);await dbDelete(ACTIVE_STORE,'active');session=null;$('finish').disabled=true;updateUI();updateTrainingControls();await renderHistory();if(navigator.onLine)syncSessions()}
 
@@ -259,8 +261,14 @@ function drawCanvas(canvas, samples,key,unit,label,selected=null){
   }
   ctx.textAlign='left';ctx.fillText(label,plotLeft,h-3);
 }
-function drawLiveChart(){const now=Date.now();powerSamples=powerSamples.filter(x=>now-x.t<=600000);const c=$('liveChart');const samples=powerSamples.length?powerSamples.map(x=>({t:Math.max(0,600000-(now-x.t))/1000,power:x.p})):[];drawCanvas(c,samples,'power','W','10 min')}
-function addLivePower(){if(Number.isFinite(lastFields.power)){powerSamples.push({t:Date.now(),p:lastFields.power});powerSamples=powerSamples.slice(-700);drawLiveChart()}}
+function drawLiveCharts(){
+  const end=session?.elapsedSec||0,start=Math.max(0,end-600);
+  const samples=(session?.samples||[]).filter(s=>s.t>=start).map(s=>({...s,t:s.t-start}));
+  if(session)samples.push({t:600});
+  drawCanvas($('livePowerChart'),samples,'power','W','10 min');
+  drawCanvas($('liveCadenceChart'),samples,'cadence','rpm','10 min');
+  drawCanvas($('liveSpeedChart'),samples,'speed','km/h','10 min');
+}
 
 function zoneData(samples){const zones=[['Z1 recuperación',0,.55],['Z2 aeróbica',.55,.75],['Z3 tempo',.75,.90],['Z4 umbral',.90,1.05],['Z5 VO₂',1.05,1.20],['Z6 anaeróbica',1.20,1.50],['Z7 neuromuscular',1.50,Infinity]];const secs=Array(zones.length).fill(0);samples.forEach(s=>{if(!Number.isFinite(s.power))return;const z=zones.findIndex((q,i)=>s.power<ftpW*q[2]&&s.power>=ftpW*q[1]);if(z>=0)secs[z]+=1});return zones.map((z,i)=>({name:z[0],min:z[1],max:z[2],sec:secs[i]}))}
 function splitData(samples){if(!samples.length)return[];const hasDist=samples.some(s=>Number.isFinite(s.distanceKm)&&s.distanceKm>0);const out=[];if(hasDist){let next=1,start=0;for(let i=0;i<samples.length;i++){if(samples[i].distanceKm>=next){out.push(splitStats(samples.slice(start,i+1),next-1,next));start=i+1;next=Math.floor(samples[i].distanceKm)+1}}if(start<samples.length)out.push(splitStats(samples.slice(start),next-1,null));}else{for(let start=0;start<samples.length;start+=300)out.push(splitStats(samples.slice(start,start+300),samples[start].t/60,Math.min(samples.at(-1).t,(samples[start+299]||samples.at(-1)).t)/60))}return out}
@@ -294,7 +302,7 @@ function backToHistory(){$('detailScreen').classList.add('hidden');$('historyScr
 async function requestWakeLock(){try{if('wakeLock'in navigator){wakeLock=await navigator.wakeLock.request('screen');$('wakeBtn').textContent='Pantalla activa';wakeLock.addEventListener('release',()=>{$('wakeBtn').textContent='Pantalla'})}}catch(e){}}
 
 async function connect(reconnect=false){if(!navigator.bluetooth){alert('Este navegador no soporta Web Bluetooth. En Android, prueba Chrome y sirve esta página por HTTPS o desde localhost.');return}try{if(!device||!reconnect)device=await navigator.bluetooth.requestDevice({filters:[{services:[SERVICE_UUID]}],optionalServices:[SERVICE_UUID]});device.addEventListener('gattserverdisconnected',onDisconnected,{once:true});$('status').textContent='Conectando…';const server=await device.gatt.connect();const service=await server.getPrimaryService(SERVICE_UUID);characteristic=await service.getCharacteristic(DATA_UUID);await characteristic.startNotifications();characteristic.addEventListener('characteristicvaluechanged',onData);$('dot').classList.add('on');$('status').textContent=device.name||'Conectada';if(session){await persistActive();startSampling();requestWakeLock()}updateTrainingControls()}catch(e){console.error(e);$('status').textContent='Error: '+(e.message||e);$('dot').classList.remove('on');updateTrainingControls()}}
-function onData(ev){const f=parseFTMS(ev.target.value.buffer);if(!f)return;mergeFields(f);addLivePower()}
+function onData(ev){const f=parseFTMS(ev.target.value.buffer);if(!f)return;mergeFields(f)}
 function onDisconnected(){$('dot').classList.remove('on');$('status').textContent=session?'Desconectada \u00b7 sesi\u00f3n conservada \u2014 reconectando\u2026':'Desconectada \u2014 reconectando\u2026';characteristic=null;stopSampling();if(session)persistActive().catch(e=>console.error('Guardar sesi\u00f3n activa',e));updateTrainingControls();clearTimeout(reconnectTimer);reconnectTimer=setTimeout(()=>{if(device?.gatt&&!device.gatt.connected)connect(true)},1200)}
 
 async function checkRecovery(){let a=await dbGet(ACTIVE_STORE,'active');while(a&&typeof a.sessionId==='string'){const removed=await dbDeleteFinalizedActive(a.sessionId);if(removed)return;const latest=await dbGet(ACTIVE_STORE,'active');if(!latest)return;if(latest.sessionId===a.sessionId){a=latest;break}a=latest}if(!a)return;session={...a,id:typeof a.sessionId==='string'?a.sessionId:sessionId()};$('resumeBox').classList.remove('hidden');$('resumeText').textContent=`${fmtTime(a.elapsedSec)} · ${fmt(a.distanceKm,2)} km · ${a.samples.length} muestras guardadas. Puedes continuar cuando vuelvas a conectar la bici.`;$('finish').disabled=false;updateUI();updateTrainingControls()}
@@ -302,7 +310,7 @@ async function checkRecovery(){let a=await dbGet(ACTIVE_STORE,'active');while(a&
 $('connect').onclick=()=>connect(false);$('startSession').onclick=async()=>{if(!device?.gatt?.connected||!characteristic||session){updateTrainingControls();return}await startNewSession()};$('finish').onclick=()=>finishSession();$('wakeBtn').onclick=requestWakeLock;$('openHistory').onclick=showHistory;$('backFromHistory').onclick=backToLive;$('backFromDetail').onclick=backToHistory;$('resumeBtn').onclick=async()=>{if(!session)return;$('resumeBox').classList.add('hidden');await connect(false)};$('clearHistory').onclick=async()=>{if(confirm('¿Borrar tu historial visible?'))await clearVisibleSessions()};$('signIn').onclick=sendSignInLink;$('signOut').onclick=async()=>{if(supabaseClient)await supabaseClient.auth.signOut()};
 window.addEventListener('online',()=>{setSyncStatus('Conexión disponible');syncSessions()});window.addEventListener('offline',()=>setSyncStatus('Sin conexión · guardado local'));document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&session)persistActive().catch(e=>console.error('Save active session',e));if(document.visibilityState==='visible'){if(session){requestWakeLock();if(device?.gatt?.connected&&characteristic&&!sampleTimer)startSampling()}syncSessions()}});window.addEventListener('pagehide',()=>{if(session)persistActive().catch(e=>console.error('Save active session',e))});
 setInterval(()=>{if(session){$('elapsed').textContent=fmtTime(session.elapsedSec);$('avgPower').textContent=fmt(calcStats(session.samples).avgPower)}},1000);
-(async()=>{try{await openDB();await checkRecovery();await initAuth()}catch(e){console.error('Inicialización',e);refreshAuthUI()}drawLiveChart();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(e=>console.error('Service worker',e))})();
+(async()=>{try{await openDB();await checkRecovery();await initAuth()}catch(e){console.error('Inicialización',e);refreshAuthUI()}drawLiveCharts();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(e=>console.error('Service worker',e))})();
 </script>
 </body>
 </html>
